@@ -1,7 +1,8 @@
 import React from 'react';
-import { Scissors, Share2, LogOut, UserCheck, Smartphone } from 'lucide-react';
+import { Share2, LogOut, UserCheck, Smartphone } from 'lucide-react';
 import { BarberShopConfig, BarberProfile } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
+import { BarberLogo } from './BarberLogo';
 
 interface NavbarProps {
   config: BarberShopConfig;
@@ -28,16 +29,10 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       <div className="mx-auto flex max-w-7xl w-full items-center justify-between px-3 py-2.5 sm:px-6 sm:py-3">
         
-        {/* Brand: BarberTurno with Animated Miniature Barber Pole */}
+        {/* Brand: BarberTurno with Barber Pole & Razor Blade Logo */}
         <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
-          <div className="relative flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-xl border border-stone-200 bg-stone-50 p-1 shadow-xs shrink-0">
-            {/* Miniature Barber Pole Cylinder */}
-            <div className="relative flex h-full w-3.5 sm:w-4 flex-col items-center overflow-hidden rounded-full border border-stone-300 bg-white shadow-inner">
-              <div className="h-1 w-full bg-stone-300" />
-              <div className="h-full w-full barber-pole-v-animated" />
-              <div className="h-1 w-full bg-stone-300" />
-            </div>
-            <Scissors className="absolute -bottom-1 -right-1 h-3.5 w-3.5 sm:h-4 sm:w-4 text-red-600 drop-shadow-sm" />
+          <div className="relative flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-xl border border-stone-800 bg-slate-900 p-1 shadow-xs shrink-0">
+            <BarberLogo size="sm" />
           </div>
 
           <div>

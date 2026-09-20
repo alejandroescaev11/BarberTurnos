@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { startAuthentication } from '@simplewebauthn/browser';
 import { BarberProfile } from '../types';
+import { BarberLogo } from './BarberLogo';
 
 interface BarberAuthModalProps {
   isOpen: boolean;
@@ -249,8 +250,8 @@ export const BarberAuthModal: React.FC<BarberAuthModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3.5 sm:px-6 sm:py-4 bg-stone-50">
           <div className="flex items-center gap-2.5 sm:gap-3">
-            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-200 shrink-0">
-              <Lock className="h-4 w-4" />
+            <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-slate-900 border border-stone-800 p-1 shrink-0 shadow-xs">
+              <BarberLogo size="xs" />
             </div>
             <div>
               <h2 className="text-xs sm:text-sm font-bold text-slate-900">

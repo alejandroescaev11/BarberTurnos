@@ -21,6 +21,7 @@ import {
 import { BarberShopConfig, BarberProfile, Booking, BarberSlot, BarberDateOption } from '../types';
 import { getGoogleCalendarUrl, downloadIcsFile } from '../lib/calendar';
 import { generateClientConfirmationWhatsApp } from '../lib/whatsapp';
+import { BarberLogo } from './BarberLogo';
 
 interface BookingWizardProps {
   config: BarberShopConfig;
@@ -451,17 +452,22 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
         {/* Welcome Hero with Animated Barber Pole Accent */}
         <div className="relative overflow-hidden rounded-3xl border border-stone-200 bg-white p-6 sm:p-8 shadow-sm">
           <div className="absolute top-0 bottom-0 left-0 w-2.5 barber-pole-v-animated" />
-          <div className="pl-3 sm:pl-4">
-            <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 mb-3">
-              <Sparkles className="h-3.5 w-3.5 text-blue-600" />
-              <span>Plataforma BarberTurno</span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pl-3 sm:pl-4">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 mb-3">
+                <Sparkles className="h-3.5 w-3.5 text-blue-600" />
+                <span>Plataforma BarberTurno</span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-black text-slate-900 font-serif tracking-tight">
+                Bienvenido a Barber<span className="text-red-600">Turno</span>
+              </h2>
+              <p className="mt-2 text-sm text-slate-600 max-w-xl">
+                Selecciona a tu barbero para acceder a su agenda individual, ver sus horarios en tiempo real y reservar tu cita directamente.
+              </p>
             </div>
-            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 font-serif tracking-tight">
-              Bienvenido a Barber<span className="text-red-600">Turno</span>
-            </h2>
-            <p className="mt-2 text-sm text-slate-600 max-w-xl">
-              Selecciona a tu barbero para acceder a su agenda individual, ver sus horarios en tiempo real y reservar tu cita directamente.
-            </p>
+            <div className="hidden sm:flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-2xl bg-slate-900 border border-stone-800 p-2 shadow-md shrink-0">
+              <BarberLogo size="md" />
+            </div>
           </div>
         </div>
 

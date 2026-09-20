@@ -1,0 +1,138 @@
+{
+  "shopName": "Barbería Imperial & Co.",
+  "tagline": "Estilo clásico, precisión moderna y atención personalizada",
+  "address": "Calle 45 # 18-24, Zona Centro",
+  "phoneWhatsapp": "+57 310 987 6543",
+  "email": "contacto@barberiaimperial.com",
+  "currencySymbol": "$",
+  "slotIntervalMinutes": 30,
+  "autoSendEmail": true,
+  "barberPassword": "barbero123",
+  "googleSheetsCsvUrl": "",
+  "googleSheetsWebhookUrl": "",
+  "schedule": [
+    {
+      "dayOfWeek": 1,
+      "dayName": "Lunes",
+      "isOpen": true,
+      "openTime": "09:00",
+      "closeTime": "20:00",
+      "lunchBreak": {
+        "start": "13:00",
+        "end": "14:00"
+      }
+    },
+    {
+      "dayOfWeek": 2,
+      "dayName": "Martes",
+      "isOpen": true,
+      "openTime": "09:00",
+      "closeTime": "20:00",
+      "lunchBreak": {
+        "start": "13:00",
+        "end": "14:00"
+      }
+    },
+    {
+      "dayOfWeek": 3,
+      "dayName": "Miércoles",
+      "isOpen": true,
+      "openTime": "09:00",
+      "closeTime": "20:00",
+      "lunchBreak": {
+        "start": "13:00",
+        "end": "14:00"
+      }
+    },
+    {
+      "dayOfWeek": 4,
+      "dayName": "Jueves",
+      "isOpen": true,
+      "openTime": "09:00",
+      "closeTime": "20:00",
+      "lunchBreak": {
+        "start": "13:00",
+        "end": "14:00"
+      }
+    },
+    {
+      "dayOfWeek": 5,
+      "dayName": "Viernes",
+      "isOpen": true,
+      "openTime": "09:00",
+      "closeTime": "20:30",
+      "lunchBreak": {
+        "start": "13:00",
+        "end": "14:00"
+      }
+    },
+    {
+      "dayOfWeek": 6,
+      "dayName": "Sábado",
+      "isOpen": true,
+      "openTime": "09:00",
+      "closeTime": "21:00",
+      "lunchBreak": {
+        "start": "13:30",
+        "end": "14:30"
+      }
+    },
+    {
+      "dayOfWeek": 0,
+      "dayName": "Domingo",
+      "isOpen": false,
+      "openTime": "10:00",
+      "closeTime": "15:00"
+    }
+  ],
+  "services": [
+    {
+      "id": "corte_clasico",
+      "name": "Corte Sencillo / Clásico",
+      "description": "Corte tradicional a máquina o tijera con acabado limpio a navaja y talco refrescante.",
+      "durationMinutes": 30,
+      "price": 15000,
+      "popular": false,
+      "category": "corte",
+      "active": true
+    },
+    {
+      "id": "corte_barba",
+      "name": "Corte + Barba",
+      "description": "Corte completo con perfilado y arreglo de barba, toalla caliente y bálsamo hidratante.",
+      "durationMinutes": 45,
+      "price": 22000,
+      "popular": true,
+      "category": "combo",
+      "active": true
+    }
+  ],
+  "hasPassword": true,
+  "googleSheetsScriptUrl": "https://script.google.com/macros/s/AKfycby0DEwPV3LrBW_CjFblvAJKw-qZutESbyRcrRfgjdltdsFcwkRMFsw5l5XOiWoVNOs/exec",
+  "barbers": [
+    {
+      "id": "alejandro",
+      "slug": "alejandro",
+      "name": "Alejandro Barber",
+      "role": "Barbero Master",
+      "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80",
+      "phone": "+57 310 987 6543",
+      "email": "alejandroescaev@gmail.com",
+      "password": "barbero123",
+      "googleSheetsScriptUrl": "https://script.google.com/macros/s/AKfycby0DEwPV3LrBW_CjFblvAJKw-qZutESbyRcrRfgjdltdsFcwkRMFsw5l5XOiWoVNOs/exec",
+      "active": true
+    },
+    {
+      "id": "carlos",
+      "slug": "carlos",
+      "name": "Carlos Mendoza",
+      "role": "Especialista en Degradados y Barba",
+      "avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&auto=format&fit=crop&q=80",
+      "phone": "+57 311 222 3344",
+      "email": "carlos@barberiaimperial.com",
+      "password": "barbero123",
+      "googleSheetsScriptUrl": "",
+      "active": true
+    }
+  ]
+}

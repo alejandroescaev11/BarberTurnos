@@ -1,0 +1,230 @@
+[
+  {
+    "id": "BARB-4306",
+    "createdAt": "2026-09-16T21:24:24.091Z",
+    "clientName": "carlos",
+    "clientEmail": "123@barberturnos.local",
+    "clientPhone": "123",
+    "clientNotes": "",
+    "preferredStyle": "",
+    "date": "2026-09-17",
+    "startTime": "07:30",
+    "endTime": "08:15",
+    "serviceIds": [
+      "turno_general"
+    ],
+    "serviceNames": [
+      "Turno en Barbería"
+    ],
+    "totalPrice": 15000,
+    "totalDurationMinutes": 45,
+    "status": "confirmada",
+    "emailSent": true,
+    "emailSentAt": "2026-09-16T21:24:25.230Z"
+  },
+  {
+    "id": "BARB-3831",
+    "createdAt": "2026-09-16T19:01:14.396Z",
+    "clientName": "Alejandro",
+    "clientEmail": "alejandroescaev@gmail.com",
+    "clientPhone": "3123903787",
+    "clientNotes": "",
+    "preferredStyle": "",
+    "date": "2026-09-17",
+    "startTime": "18:00",
+    "endTime": "18:45",
+    "serviceIds": [
+      "turno_general"
+    ],
+    "serviceNames": [
+      "Turno en Barbería"
+    ],
+    "totalPrice": 15000,
+    "totalDurationMinutes": 45,
+    "status": "confirmada",
+    "emailSent": true,
+    "emailSentAt": "2026-09-16T19:01:15.497Z"
+  },
+  {
+    "id": "BARB-5550",
+    "createdAt": "2026-09-16T18:57:48.352Z",
+    "clientName": "Alejandro",
+    "clientEmail": "alejandroescaev@gmail.com",
+    "clientPhone": "3123903787",
+    "clientNotes": "",
+    "preferredStyle": "",
+    "date": "2026-09-17",
+    "startTime": "16:00",
+    "endTime": "16:45",
+    "serviceIds": [
+      "turno_general"
+    ],
+    "serviceNames": [
+      "Turno en Barbería"
+    ],
+    "totalPrice": 15000,
+    "totalDurationMinutes": 45,
+    "status": "confirmada",
+    "emailSent": true,
+    "emailSentAt": "2026-09-16T18:57:49.806Z"
+  },
+  {
+    "id": "BARB-6360",
+    "createdAt": "2026-09-14T16:50:39.145Z",
+    "clientName": "Alejandro Test OK",
+    "clientEmail": "alejandro@test.com",
+    "clientPhone": "3123903787",
+    "clientNotes": "Prueba sin fila nueva",
+    "preferredStyle": "",
+    "date": "2026-09-14",
+    "startTime": "14:00",
+    "endTime": "14:30",
+    "serviceIds": [
+      "corte_clasico"
+    ],
+    "serviceNames": [
+      "Corte Sencillo / Clásico"
+    ],
+    "totalPrice": 15000,
+    "totalDurationMinutes": 30,
+    "status": "cancelada",
+    "emailSent": true,
+    "emailSentAt": "2026-09-14T16:50:40.157Z"
+  },
+  {
+    "id": "BARB-8022",
+    "createdAt": "2026-09-14T16:49:13.952Z",
+    "clientName": "Alejandro Test",
+    "clientEmail": "alejandro@test.com",
+    "clientPhone": "3123903787",
+    "clientNotes": "Prueba actualización fila",
+    "preferredStyle": "",
+    "date": "2026-09-14",
+    "startTime": "14:00",
+    "endTime": "14:30",
+    "serviceIds": [
+      "corte_clasico"
+    ],
+    "serviceNames": [
+      "Corte Sencillo / Clásico"
+    ],
+    "totalPrice": 15000,
+    "totalDurationMinutes": 30,
+    "status": "cancelada",
+    "emailSent": true,
+    "emailSentAt": "2026-09-14T16:49:15.125Z"
+  },
+  {
+    "id": "BARB-2062",
+    "createdAt": "2026-09-14T16:40:09.318Z",
+    "clientName": "Alejandro",
+    "clientEmail": "alejandroescaev@gmail.com",
+    "clientPhone": "3123903787",
+    "clientNotes": "",
+    "preferredStyle": "",
+    "date": "2026-09-14",
+    "startTime": "14:00",
+    "endTime": "14:30",
+    "serviceIds": [
+      "corte_clasico"
+    ],
+    "serviceNames": [
+      "Corte Sencillo / Clásico"
+    ],
+    "totalPrice": 15000,
+    "totalDurationMinutes": 30,
+    "status": "confirmada",
+    "emailSent": true,
+    "emailSentAt": "2026-09-14T16:40:10.598Z"
+  },
+  {
+    "id": "BARB-1572",
+    "createdAt": "2026-09-14T16:09:08.473Z",
+    "clientName": "Alejandro",
+    "clientEmail": "alejandroescaev@gmail.com",
+    "clientPhone": "+573123903787",
+    "clientNotes": "",
+    "preferredStyle": "",
+    "date": "2026-09-14",
+    "startTime": "12:00",
+    "endTime": "12:30",
+    "serviceIds": [
+      "corte_clasico"
+    ],
+    "serviceNames": [
+      "Corte Sencillo / Clásico"
+    ],
+    "totalPrice": 15000,
+    "totalDurationMinutes": 30,
+    "status": "confirmada",
+    "emailSent": true,
+    "emailSentAt": "2026-09-14T16:09:08.484Z"
+  },
+  {
+    "id": "BARB-6291",
+    "createdAt": "2026-09-14T14:20:22.553Z",
+    "clientName": "Alejandro",
+    "clientEmail": "alejandroescaev@gmail.com",
+    "clientPhone": "3123903787",
+    "clientNotes": "Preferencia: Degradado medio / Fade",
+    "preferredStyle": "Degradado medio / Fade",
+    "date": "2026-09-15",
+    "startTime": "09:30",
+    "endTime": "10:15",
+    "serviceIds": [
+      "corte_barba"
+    ],
+    "serviceNames": [
+      "Corte + Barba Tradicional"
+    ],
+    "totalPrice": 22000,
+    "totalDurationMinutes": 45,
+    "status": "confirmada",
+    "emailSent": true,
+    "emailSentAt": "2026-09-14T14:20:22.563Z"
+  },
+  {
+    "id": "BARB-7102",
+    "createdAt": "2026-09-14T11:02:38.218Z",
+    "clientName": "Mateo Gómez",
+    "clientEmail": "mateo.gomez@ejemplo.com",
+    "clientPhone": "+57 312 456 7890",
+    "clientNotes": "Degradado medio en los lados, tijera arriba.",
+    "date": "2026-09-14",
+    "startTime": "10:00",
+    "endTime": "10:45",
+    "serviceIds": [
+      "corte_barba"
+    ],
+    "serviceNames": [
+      "Corte + Barba Tradicional"
+    ],
+    "totalPrice": 22000,
+    "totalDurationMinutes": 45,
+    "status": "confirmada",
+    "emailSent": true,
+    "emailSentAt": "2026-09-14T11:02:38.218Z"
+  },
+  {
+    "id": "BARB-8491",
+    "createdAt": "2026-09-14T09:02:38.218Z",
+    "clientName": "Santiago Rodríguez",
+    "clientEmail": "santiago.r@ejemplo.com",
+    "clientPhone": "+57 315 789 1234",
+    "clientNotes": "Primera vez en la barbería.",
+    "date": "2026-09-14",
+    "startTime": "11:30",
+    "endTime": "12:00",
+    "serviceIds": [
+      "corte_clasico"
+    ],
+    "serviceNames": [
+      "Corte Clásico / Sencillo"
+    ],
+    "totalPrice": 15000,
+    "totalDurationMinutes": 30,
+    "status": "confirmada",
+    "emailSent": true,
+    "emailSentAt": "2026-09-14T09:02:38.218Z"
+  }
+]

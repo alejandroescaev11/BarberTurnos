@@ -1,0 +1,13 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+cloudflared.exe
+public_url.txt
+data/*.db
+data/*.db-wal
+data/*.db-shm

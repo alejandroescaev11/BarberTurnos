@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+/* Strict mobile viewport overflow-x lock */
+html {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  box-sizing: border-box;
+}
+
+*, *::before, *::after {
+  box-sizing: inherit;
+}
+
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  position: relative;
+  min-height: 100dvh;
+}
+
+#root {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+@layer utilities {
+  /* Warm barbershop palette surfaces */
+  .bg-warm-canvas {
+    background-color: #faf8f5;
+  }
+
+  /* Classic Barber Pole Animated Stripes (Red, White, Blue) */
+  .barber-pole-animated {
+    background: repeating-linear-gradient(
+      -45deg,
+      #dc2626 0px,
+      #dc2626 12px,
+      #ffffff 12px,
+      #ffffff 24px,
+      #1d4ed8 24px,
+      #1d4ed8 36px,
+      #ffffff 36px,
+      #ffffff 48px
+    );
+    background-size: 67.88px 100%;
+    animation: barberPoleMove 2.5s linear infinite;
+  }
+
+  .barber-pole-v-animated {
+    background: repeating-linear-gradient(
+      -45deg,
+      #dc2626 0px,
+      #dc2626 10px,
+      #ffffff 10px,
+      #ffffff 20px,
+      #1d4ed8 20px,
+      #1d4ed8 30px,
+      #ffffff 30px,
+      #ffffff 40px
+    );
+    background-size: 100% 56.57px;
+    animation: barberPoleVerticalMove 2.5s linear infinite;
+  }
+}
+
+@keyframes barberPoleMove {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 67.88px 0;
+  }
+}
+
+@keyframes barberPoleVerticalMove {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 0 56.57px;
+  }
+}
+
+/* Custom clean scrollbars with subtle warm/slate tone */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: #f5f2eb;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

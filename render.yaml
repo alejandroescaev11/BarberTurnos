@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: barberturnos
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: BARBER_PASSWORD
+        value: barbero123
+    disk:
+      name: barberturnos-data
+      mountPath: /app/data
+      sizeGB: 1

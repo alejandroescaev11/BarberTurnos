@@ -30,12 +30,25 @@ import {
   Pause,
   Play,
   Trash2,
-  Fingerprint
+  Fingerprint,
+  Bell,
+  BellRing,
+  Smartphone,
+  CheckCheck
 } from 'lucide-react';
 import { startRegistration } from '@simplewebauthn/browser';
 import { BarberShopConfig, BarberProfile, Booking, BookingStatus, BarberSlot } from '../types';
 import { generateReminderWhatsApp } from '../lib/whatsapp';
 import { notifyNewBooking, playBookingChime, requestNotificationPermission } from '../lib/notifications';
+import { 
+  isPushSupported, 
+  getCurrentPushSubscription, 
+  subscribeToPush, 
+  unsubscribeFromPush, 
+  sendTestPush, 
+  getEmailStatus, 
+  sendTestEmail 
+} from '../lib/pushNotifications';
 import { ScheduleOpener } from './ScheduleOpener';
 
 interface BarberDashboardProps {
@@ -206,6 +219,106 @@ export const BarberDashboard: React.FC<BarberDashboardProps> = ({
       }
     } catch (e: any) {
       alert(e.message || 'Error al desvincular el dispositivo.');
+    }
+  };
+
+  // Web Push & Email notification state
+  const [isPushSupportedDevice, setIsPushSupportedDevice] = useState(false);
+  const [isPushSubscribed, setIsPushSubscribed] = useState(false);
+  const [isSubscribingPush, setIsSubscribingPush] = useState(false);
+  const [isSendingTestPush, setIsSendingTestPush] = useState(false);
+  const [pushStatusMessage, setPushStatusMessage] = useState<{ success: boolean; text: string } | null>(null);
+
+  const [emailServiceStatus, setEmailServiceStatus] = useState<{
+    mode: 'smtp' | 'simulation';
+    autoSendEmail: boolean;
+    configured: boolean;
+    from: string;
+    host: string;
+    user: string;
+    recentLogsCount: number;
+  } | null>(null);
+  const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
+  const [emailStatusMessage, setEmailStatusMessage] = useState<{ success: boolean; text: string } | null>(null);
+
+  // Load push and email status when perfil tab opens
+  useEffect(() => {
+    if (activeTab === 'perfil') {
+      setIsPushSupportedDevice(isPushSupported());
+      getCurrentPushSubscription().then(sub => {
+        setIsPushSubscribed(Boolean(sub));
+      }).catch(err => console.warn('Error checking push subscription:', err));
+
+      getEmailStatus().then(status => {
+        setEmailServiceStatus(status);
+      }).catch(err => console.warn('Error checking email status:', err));
+    }
+  }, [activeTab]);
+
+  const handleTogglePush = async () => {
+    setPushStatusMessage(null);
+    setIsSubscribingPush(true);
+    const token = sessionStorage.getItem('barber_auth_token') || '';
+    try {
+      if (isPushSubscribed) {
+        const res = await unsubscribeFromPush(token);
+        if (res.success) {
+          setIsPushSubscribed(false);
+          setPushStatusMessage({ success: true, text: 'Notificaciones push desactivadas en este dispositivo.' });
+        } else {
+          setPushStatusMessage({ success: false, text: res.error || 'Error al desactivar notificaciones.' });
+        }
+      } else {
+        const res = await subscribeToPush(activeBarber?.id, token);
+        if (res.success) {
+          setIsPushSubscribed(true);
+          setPushStatusMessage({ success: true, text: '¡Notificaciones push activadas! Recibirás una alerta en vivo cuando un cliente reserve contigo.' });
+        } else {
+          setPushStatusMessage({ success: false, text: res.error || 'No se pudo activar las notificaciones push.' });
+        }
+      }
+    } catch (err: any) {
+      setPushStatusMessage({ success: false, text: err?.message || 'Error en la suscripción push.' });
+    } finally {
+      setIsSubscribingPush(false);
+    }
+  };
+
+  const handleSendTestPush = async () => {
+    setPushStatusMessage(null);
+    setIsSendingTestPush(true);
+    const token = sessionStorage.getItem('barber_auth_token') || '';
+    try {
+      const res = await sendTestPush(token);
+      if (res.success) {
+        setPushStatusMessage({ success: true, text: `✅ ${res.message}` });
+      } else {
+        setPushStatusMessage({ success: false, text: res.message || 'Error al enviar notificación de prueba.' });
+      }
+    } catch (err: any) {
+      setPushStatusMessage({ success: false, text: err?.message || 'Error en prueba push.' });
+    } finally {
+      setIsSendingTestPush(false);
+    }
+  };
+
+  const handleSendTestEmail = async () => {
+    setEmailStatusMessage(null);
+    setIsSendingTestEmail(true);
+    const token = sessionStorage.getItem('barber_auth_token') || '';
+    try {
+      const targetEmail = activeBarber?.email || config.email;
+      const res = await sendTestEmail(targetEmail, token);
+      if (res.success) {
+        const modeText = res.result?.mode === 'smtp' ? 'enviado vía SMTP real' : 'registrado en modo simulación';
+        setEmailStatusMessage({ success: true, text: `✅ Correo de prueba (${modeText}) a ${targetEmail}. Revisa la bandeja de entrada o los registros.` });
+      } else {
+        setEmailStatusMessage({ success: false, text: res.error || 'Error al enviar correo de prueba.' });
+      }
+    } catch (err: any) {
+      setEmailStatusMessage({ success: false, text: err?.message || 'Error en prueba de correo.' });
+    } finally {
+      setIsSendingTestEmail(false);
     }
   };
 
@@ -1520,6 +1633,187 @@ export const BarberDashboard: React.FC<BarberDashboardProps> = ({
               </div>
             </div>
 
+          </div>
+
+          {/* Bottom Grid: Live Push Notifications & Centralized Email System */}
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Card 1: Web Push Notifications for Barbers */}
+            <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-3 border-b border-stone-200 pb-4 mb-4">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-100">
+                    <BellRing className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">Notificaciones Push en Vivo</h3>
+                    <p className="text-[11px] text-slate-500">
+                      Avisos instantáneos en pantalla cuando un cliente reserve un turno contigo.
+                    </p>
+                  </div>
+                </div>
+
+                {pushStatusMessage && (
+                  <div className={`mb-4 rounded-xl p-3 text-xs border ${
+                    pushStatusMessage.success
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                      : 'border-red-200 bg-red-50 text-red-900'
+                  }`}>
+                    {pushStatusMessage.text}
+                  </div>
+                )}
+
+                <div className="space-y-3 mb-5">
+                  <div className="flex items-center justify-between rounded-xl bg-stone-50 border border-stone-200 p-3 text-xs">
+                    <div className="flex items-center gap-2">
+                      <Smartphone className="h-4 w-4 text-slate-500" />
+                      <span className="font-semibold text-slate-700">Estado en este dispositivo:</span>
+                    </div>
+                    {isPushSubscribed ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 text-emerald-800 font-bold px-2.5 py-1 text-[11px]">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                        Activas
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-200 text-stone-700 font-semibold px-2.5 py-1 text-[11px]">
+                        Inactivas
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    Al activar las notificaciones, este celular o navegador quedará enlazado a tu cuenta (<strong>{activeBarber?.name}</strong>). Cuando cualquier cliente agende un turno contigo, recibirás una notificación emergente con sonido y vibración con los datos del cliente, la hora y el servicio.
+                  </p>
+
+                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-3 text-[11px] text-indigo-900">
+                    <p className="font-semibold mb-0.5">💡 Consejo de uso en el celular:</p>
+                    <p className="text-indigo-800">
+                      Para recibir notificaciones aun con el celular bloqueado, instala la app tocando <em>"Agregar a la pantalla principal"</em> y activa el interruptor a continuación.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-stone-200 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleTogglePush}
+                  disabled={isSubscribingPush || !isPushSupportedDevice}
+                  className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 px-4 text-xs font-bold transition shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                    isPushSubscribed
+                      ? 'border border-stone-300 bg-stone-100 text-stone-700 hover:bg-stone-200'
+                      : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  }`}
+                >
+                  <Bell className="h-4 w-4" />
+                  <span>
+                    {isSubscribingPush
+                      ? 'Procesando...'
+                      : isPushSubscribed
+                        ? 'Desactivar en este Dispositivo'
+                        : '🔔 Activar Notificaciones Push'}
+                  </span>
+                </button>
+
+                {isPushSubscribed && (
+                  <button
+                    type="button"
+                    onClick={handleSendTestPush}
+                    disabled={isSendingTestPush}
+                    className="flex items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 py-2.5 px-3.5 text-xs font-bold transition cursor-pointer shadow-2xs disabled:opacity-50"
+                    title="Enviar notificación de prueba"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    <span>{isSendingTestPush ? 'Probando...' : 'Probar Notificación'}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Card 2: Centralized Email Service */}
+            <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-3 border-b border-stone-200 pb-4 mb-4">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 border border-amber-100">
+                    <Mail className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">Correo Electrónico Centralizado</h3>
+                    <p className="text-[11px] text-slate-500">
+                      Confirmaciones automáticas emitidas desde la cuenta oficial de la plataforma.
+                    </p>
+                  </div>
+                </div>
+
+                {emailStatusMessage && (
+                  <div className={`mb-4 rounded-xl p-3 text-xs border ${
+                    emailStatusMessage.success
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                      : 'border-red-200 bg-red-50 text-red-900'
+                  }`}>
+                    {emailStatusMessage.text}
+                  </div>
+                )}
+
+                <div className="space-y-2.5 mb-5 text-xs">
+                  <div className="flex items-center justify-between rounded-xl bg-stone-50 border border-stone-200 p-2.5">
+                    <span className="text-slate-600 font-semibold">Estado del Servicio:</span>
+                    {emailServiceStatus?.mode === 'smtp' ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 text-emerald-800 font-bold px-2.5 py-0.5 text-[11px]">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                        Conectado a SMTP Real
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 text-amber-800 font-bold px-2.5 py-0.5 text-[11px]">
+                        Modo Simulación / Logs
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between py-1 border-b border-stone-100 text-slate-600">
+                    <span>Remitente Central (FROM):</span>
+                    <strong className="text-slate-900 font-mono text-[11px]">
+                      {emailServiceStatus?.from || `"${config.shopName}" <${config.email}>`}
+                    </strong>
+                  </div>
+
+                  <div className="flex items-center justify-between py-1 border-b border-stone-100 text-slate-600">
+                    <span>Tu correo de recepción:</span>
+                    <strong className="text-slate-900 font-mono text-[11px]">
+                      {activeBarber?.email || 'Sin correo asociado'}
+                    </strong>
+                  </div>
+
+                  <div className="flex items-center justify-between py-1 text-slate-600">
+                    <span>Servidor SMTP Saliente:</span>
+                    <span className="text-slate-700 font-medium">
+                      {emailServiceStatus?.host || 'smtp.gmail.com'}
+                    </span>
+                  </div>
+
+                  <div className="rounded-xl border border-stone-200 bg-stone-50 p-3 text-[11px] text-slate-600">
+                    <p className="font-semibold text-slate-800 mb-0.5">ℹ️ ¿Cómo funciona el envío centralizado?</p>
+                    <p>
+                      Los barberos no necesitan configurar contraseñas ni cuentas de correo individuales. Todos los correos a clientes y avisos al barbero son despachados desde la cuenta central configurada en el servidor (Render).
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-stone-200 flex items-center justify-between">
+                <span className="text-[11px] text-slate-500">
+                  {emailServiceStatus?.recentLogsCount || 0} correo(s) registrados en historial
+                </span>
+                <button
+                  type="button"
+                  onClick={handleSendTestEmail}
+                  disabled={isSendingTestEmail}
+                  className="flex items-center gap-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold py-2.5 px-4 text-xs transition shadow-sm cursor-pointer disabled:opacity-50"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  <span>{isSendingTestEmail ? 'Enviando prueba...' : 'Enviar Correo de Prueba'}</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

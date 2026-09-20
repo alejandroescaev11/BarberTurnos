@@ -11,3 +11,5 @@ public_url.txt
 data/*.db
 data/*.db-wal
 data/*.db-shm
+data/vapid.json
+

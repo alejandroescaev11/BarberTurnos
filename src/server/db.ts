@@ -11,7 +11,8 @@ import {
   Service, 
   BarberSlot, 
   BarberDateOption,
-  BarberAuthenticator 
+  BarberAuthenticator,
+  BarberPushSubscription 
 } from '../types';
 
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
@@ -139,6 +140,18 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_auth_barberId ON barber_authenticators(barberId);
   CREATE INDEX IF NOT EXISTS idx_auth_credId ON barber_authenticators(credentialId);
+
+  CREATE TABLE IF NOT EXISTS barber_push_subscriptions (
+    id TEXT PRIMARY KEY,
+    barberId TEXT NOT NULL,
+    endpoint TEXT UNIQUE NOT NULL,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    deviceName TEXT,
+    createdAt TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_push_barberId ON barber_push_subscriptions(barberId);
+  CREATE INDEX IF NOT EXISTS idx_push_endpoint ON barber_push_subscriptions(endpoint);
 `);
 
 // Migration: Ensure shopName, status and isAdmin columns exist on barbers table
@@ -893,4 +906,71 @@ export function deleteAuthenticator(id: string, barberId: string): boolean {
   `).run(id, barberId);
   return res.changes > 0;
 }
+
+// =========================================================================
+// WEBPUSH / PUSH SUBSCRIPTIONS (PER BARBER)
+// =========================================================================
+
+export function savePushSubscription(
+  barberId: string, 
+  subscription: { endpoint: string; keys?: { p256dh?: string; auth?: string } }, 
+  deviceName: string = 'Dispositivo Móvil'
+): BarberPushSubscription {
+  const endpoint = subscription.endpoint;
+  const p256dh = subscription.keys?.p256dh || '';
+  const auth = subscription.keys?.auth || '';
+  const id = `sub_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const createdAt = new Date().toISOString();
+
+  // Upsert on endpoint
+  db.prepare(`
+    INSERT INTO barber_push_subscriptions (id, barberId, endpoint, p256dh, auth, deviceName, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(endpoint) DO UPDATE SET
+      barberId = excluded.barberId,
+      p256dh = excluded.p256dh,
+      auth = excluded.auth,
+      deviceName = excluded.deviceName,
+      createdAt = excluded.createdAt
+  `).run(id, barberId, endpoint, p256dh, auth, deviceName, createdAt);
+
+  return { id, barberId, endpoint, p256dh, auth, deviceName, createdAt };
+}
+
+export function getPushSubscriptionsForBarber(barberId: string): BarberPushSubscription[] {
+  const rows = db.prepare(`
+    SELECT * FROM barber_push_subscriptions 
+    WHERE barberId = ? 
+    ORDER BY createdAt DESC
+  `).all(barberId) as any[];
+
+  return rows.map(r => ({
+    id: r.id,
+    barberId: r.barberId,
+    endpoint: r.endpoint,
+    p256dh: r.p256dh,
+    auth: r.auth,
+    deviceName: r.deviceName || 'Dispositivo',
+    createdAt: r.createdAt
+  }));
+}
+
+export function deletePushSubscription(endpoint: string): boolean {
+  const res = db.prepare('DELETE FROM barber_push_subscriptions WHERE endpoint = ?').run(endpoint);
+  return res.changes > 0;
+}
+
+export function getAllPushSubscriptions(): BarberPushSubscription[] {
+  const rows = db.prepare('SELECT * FROM barber_push_subscriptions').all() as any[];
+  return rows.map(r => ({
+    id: r.id,
+    barberId: r.barberId,
+    endpoint: r.endpoint,
+    p256dh: r.p256dh,
+    auth: r.auth,
+    deviceName: r.deviceName || 'Dispositivo',
+    createdAt: r.createdAt
+  }));
+}
+
 

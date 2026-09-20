@@ -4,6 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import { createServer as createViteServer } from 'vite';
 import nodemailer from 'nodemailer';
+import webpush from 'web-push';
 import dotenv from 'dotenv';
 import {
   generateRegistrationOptions,
@@ -180,14 +181,95 @@ function getEmailTransporter() {
   return null;
 }
 
+// ----------------------------------------------------
+// WEBPUSH / VAPID CONFIGURATION
+// ----------------------------------------------------
+const VAPID_FILE = path.join(DATA_DIR, 'vapid.json');
+let vapidKeys = {
+  publicKey: process.env.VAPID_PUBLIC_KEY || '',
+  privateKey: process.env.VAPID_PRIVATE_KEY || ''
+};
+
+if (!vapidKeys.publicKey || !vapidKeys.privateKey) {
+  try {
+    if (fs.existsSync(VAPID_FILE)) {
+      vapidKeys = JSON.parse(fs.readFileSync(VAPID_FILE, 'utf-8'));
+    }
+  } catch {}
+
+  if (!vapidKeys.publicKey || !vapidKeys.privateKey) {
+    vapidKeys = webpush.generateVAPIDKeys();
+    try {
+      fs.writeFileSync(VAPID_FILE, JSON.stringify(vapidKeys, null, 2));
+    } catch {}
+  }
+}
+
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:soporte@barberturnos.com';
+try {
+  webpush.setVapidDetails(VAPID_SUBJECT, vapidKeys.publicKey, vapidKeys.privateKey);
+} catch (e: any) {
+  console.warn('[WebPush] Error configuring VAPID details:', e?.message);
+}
+
+async function sendPushNotificationToBarber(
+  barberId: string, 
+  payload: { title: string; body: string; data?: any; icon?: string; badge?: string }
+): Promise<{ sentCount: number; failedCount: number }> {
+  const subscriptions = db.getPushSubscriptionsForBarber(barberId);
+  if (!subscriptions || subscriptions.length === 0) {
+    return { sentCount: 0, failedCount: 0 };
+  }
+
+  const pushPayload = JSON.stringify({
+    title: payload.title,
+    body: payload.body,
+    icon: payload.icon || '/pwa-192x192.png',
+    badge: payload.badge || '/pwa-192x192.png',
+    data: payload.data || { url: '/?view=dashboard' }
+  });
+
+  let sentCount = 0;
+  let failedCount = 0;
+
+  for (const sub of subscriptions) {
+    try {
+      await webpush.sendNotification(
+        {
+          endpoint: sub.endpoint,
+          keys: {
+            p256dh: sub.p256dh,
+            auth: sub.auth
+          }
+        },
+        pushPayload
+      );
+      sentCount++;
+    } catch (err: any) {
+      failedCount++;
+      if (err.statusCode === 404 || err.statusCode === 410) {
+        db.deletePushSubscription(sub.endpoint);
+        console.log(`[WebPush] Removed expired subscription for barber ${barberId}`);
+      } else {
+        console.warn(`[WebPush] Handled push warning for ${sub.endpoint}:`, err?.message);
+      }
+    }
+  }
+
+  return { sentCount, failedCount };
+}
+
 /**
- * Generates rich HTML template for booking confirmation
+ * Generates rich HTML template for client booking confirmation
  */
 function generateEmailHtml(booking: Booking, shopConfig: BarberShopConfig): string {
   const dateFormatted = booking.date;
   const servicesListHtml = booking.serviceNames
     .map(name => `<li style="padding: 4px 0; color: #d4d4d8;">✂️ <strong>${name}</strong></li>`)
     .join('');
+
+  const cleanWhatsapp = (shopConfig.phoneWhatsapp || '').replace(/\D/g, '');
+  const waUrl = cleanWhatsapp ? `https://wa.me/${cleanWhatsapp}?text=${encodeURIComponent(`Hola, tengo una pregunta sobre mi cita #${booking.id} para el ${booking.date}.`)}` : '';
 
   return `
     <!DOCTYPE html>
@@ -200,7 +282,7 @@ function generateEmailHtml(booking: Booking, shopConfig: BarberShopConfig): stri
       <div style="max-width: 580px; margin: 0 auto; background: #1e293b; border-radius: 16px; border: 1px solid #334155; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
         
         <!-- Header -->
-        <div style="background: linear-gradient(135deg, #d97706 0%, #b45309 100%); padding: 32px 24px; text-align: center;">
+        <div style="background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 50%, #dc2626 100%); padding: 32px 24px; text-align: center;">
           <span style="font-size: 40px;">💈</span>
           <h1 style="margin: 8px 0 0 0; font-size: 24px; color: #ffffff; letter-spacing: 0.5px;">¡Cita Confirmada con Éxito!</h1>
           <p style="margin: 6px 0 0 0; color: #fef3c7; font-size: 15px;">${shopConfig.shopName}</p>
@@ -209,7 +291,7 @@ function generateEmailHtml(booking: Booking, shopConfig: BarberShopConfig): stri
         <!-- Content -->
         <div style="padding: 32px 28px;">
           <p style="font-size: 16px; color: #cbd5e1; margin-top: 0;">
-            Hola <strong>${booking.clientName}</strong>, tu cita en <strong>${shopConfig.shopName}</strong> ha sido agendada exitosamente.
+            Hola <strong>${booking.clientName}</strong>, tu cita con <strong>${booking.barberName || 'tu barbero'}</strong> en <strong>${shopConfig.shopName}</strong> ha sido agendada exitosamente.
           </p>
 
           <!-- Ticket Box -->
@@ -220,6 +302,10 @@ function generateEmailHtml(booking: Booking, shopConfig: BarberShopConfig): stri
             </div>
 
             <table style="width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.6;">
+              <tr>
+                <td style="color: #94a3b8; padding: 6px 0;">✂️ Barbero:</td>
+                <td style="color: #f8fafc; font-weight: 700; text-align: right;">${booking.barberName || 'Barbero Profesional'}</td>
+              </tr>
               <tr>
                 <td style="color: #94a3b8; padding: 6px 0;">📅 Fecha:</td>
                 <td style="color: #f8fafc; font-weight: 600; text-align: right;">${dateFormatted}</td>
@@ -261,16 +347,19 @@ function generateEmailHtml(booking: Booking, shopConfig: BarberShopConfig): stri
             <p style="margin: 0;"><strong>💡 Recordatorio importante:</strong> Recuerda llegar 5 minutos antes de tu cita para garantizar la atención puntual. El pago se realiza directamente en el local en efectivo o transferencia.</p>
           </div>
 
-          <!-- Contact info -->
-          <p style="font-size: 14px; color: #94a3b8; text-align: center; margin-bottom: 0;">
-            ¿Necesitas reprogramar o tienes alguna pregunta?<br>
-            Escríbenos directamente a nuestro WhatsApp: <strong style="color: #38bdf8;">${shopConfig.phoneWhatsapp}</strong>
-          </p>
+          <!-- Contact info & WhatsApp -->
+          <div style="text-align: center; margin-top: 24px;">
+            ${waUrl ? `
+              <a href="${waUrl}" style="display: inline-block; background: #16a34a; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: bold; font-size: 14px;">
+                💬 Contactar por WhatsApp al Local
+              </a>
+            ` : ''}
+          </div>
         </div>
 
         <!-- Footer -->
         <div style="background-color: #0b1120; padding: 16px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #1e293b;">
-          ${shopConfig.shopName} • Sistema de Asignación de Turnos Inteligente
+          ${shopConfig.shopName} • Sistema de Asignación de Turnos BarberTurnos
         </div>
       </div>
     </body>
@@ -279,7 +368,101 @@ function generateEmailHtml(booking: Booking, shopConfig: BarberShopConfig): stri
 }
 
 /**
- * Dispatch confirmation email or log simulation
+ * Generates rich HTML template for barber appointment notification
+ */
+function generateBarberNotificationEmailHtml(booking: Booking, barber: BarberProfile, shopConfig: BarberShopConfig): string {
+  const cleanPhone = (booking.clientPhone || '').replace(/\D/g, '');
+  const waUrl = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(`Hola ${booking.clientName}, te escribo de ${shopConfig.shopName} respecto a tu cita agendada para el ${booking.date} a las ${booking.startTime} hs.`)}` : '';
+  const servicesListHtml = booking.serviceNames
+    .map(name => `<li style="padding: 4px 0; color: #d4d4d8;">✂️ <strong>${name}</strong></li>`)
+    .join('');
+
+  return `
+    <!DOCTYPE html>
+    <html lang="es">
+    <head><meta charset="utf-8"><title>Nueva Cita Agendada</title></head>
+    <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; margin: 0; padding: 24px;">
+      <div style="max-width: 580px; margin: 0 auto; background: #1e293b; border-radius: 16px; border: 1px solid #334155; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+        
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 50%, #dc2626 100%); padding: 30px 24px; text-align: center;">
+          <span style="font-size: 40px;">💈</span>
+          <h1 style="margin: 8px 0 0 0; font-size: 24px; color: #ffffff;">¡Tienes una Nueva Cita!</h1>
+          <p style="margin: 6px 0 0 0; color: #93c5fd; font-size: 15px;">Hola ${barber.name}, un cliente ha reservado en tu agenda</p>
+        </div>
+
+        <!-- Content -->
+        <div style="padding: 30px 28px;">
+          <!-- Client Card -->
+          <div style="background-color: #090d16; border: 1px solid #2563eb; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #1e293b; padding-bottom: 12px; margin-bottom: 12px;">
+              <span style="color: #94a3b8; font-size: 13px;">CITA #${booking.id}</span>
+              <strong style="color: #38bdf8; font-size: 14px;">ESTADO: CONFIRMADA</strong>
+            </div>
+
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.6;">
+              <tr>
+                <td style="color: #94a3b8; padding: 6px 0;">👤 Cliente:</td>
+                <td style="color: #ffffff; font-weight: 700; text-align: right;">${booking.clientName}</td>
+              </tr>
+              <tr>
+                <td style="color: #94a3b8; padding: 6px 0;">📱 Teléfono:</td>
+                <td style="color: #38bdf8; font-weight: 600; text-align: right;">${booking.clientPhone}</td>
+              </tr>
+              <tr>
+                <td style="color: #94a3b8; padding: 6px 0;">📅 Fecha:</td>
+                <td style="color: #ffffff; font-weight: 600; text-align: right;">${booking.date}</td>
+              </tr>
+              <tr>
+                <td style="color: #94a3b8; padding: 6px 0;">⏰ Hora:</td>
+                <td style="color: #fbbf24; font-weight: 700; text-align: right;">${booking.startTime} - ${booking.endTime} hs</td>
+              </tr>
+              <tr>
+                <td style="color: #94a3b8; padding: 6px 0;">⏱️ Duración:</td>
+                <td style="color: #ffffff; text-align: right;">${booking.totalDurationMinutes} min</td>
+              </tr>
+              <tr>
+                <td style="color: #94a3b8; padding: 6px 0;">💵 Valor a cobrar:</td>
+                <td style="color: #10b981; font-weight: 800; font-size: 16px; text-align: right;">$${booking.totalPrice.toLocaleString()}</td>
+              </tr>
+            </table>
+
+            <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid #1e293b;">
+              <span style="color: #94a3b8; font-size: 13px; display: block; margin-bottom: 6px;">Servicios solicitados:</span>
+              <ul style="margin: 0; padding-left: 20px; font-size: 14px;">
+                ${servicesListHtml}
+              </ul>
+            </div>
+
+            ${booking.clientNotes ? `
+              <div style="margin-top: 12px; font-size: 13px; color: #cbd5e1; background: #1e293b; padding: 10px 12px; border-radius: 6px; border-left: 3px solid #38bdf8;">
+                <strong>Nota del cliente:</strong> ${booking.clientNotes}
+              </div>
+            ` : ''}
+          </div>
+
+          <!-- Actions -->
+          <div style="text-align: center; margin: 20px 0;">
+            ${waUrl ? `
+              <a href="${waUrl}" style="display: inline-block; background-color: #16a34a; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: bold; font-size: 14px;">
+                💬 Chatear por WhatsApp con el Cliente
+              </a>
+            ` : ''}
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div style="background-color: #0b1120; padding: 16px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #1e293b;">
+          ${shopConfig.shopName} • Notificación Automática de Citas
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+/**
+ * Dispatch confirmation email or log simulation (notifies client AND barber from the central application account)
  */
 async function dispatchConfirmationEmail(booking: Booking, currentConfig: BarberShopConfig): Promise<{ sent: boolean; mode: 'smtp' | 'simulation'; error?: string; log: EmailRecord }> {
   const htmlContent = generateEmailHtml(booking, currentConfig);
@@ -289,9 +472,11 @@ async function dispatchConfirmationEmail(booking: Booking, currentConfig: Barber
   let status: 'sent' | 'simulated' | 'error' = 'simulated';
   let errorMsg: string | undefined = undefined;
 
+  const fromAddr = process.env.SMTP_FROM || `"${currentConfig.shopName}" <${process.env.SMTP_USER || currentConfig.email}>`;
+
   if (transporter && currentConfig.autoSendEmail) {
     try {
-      const fromAddr = process.env.SMTP_FROM || `"${currentConfig.shopName}" <${currentConfig.email}>`;
+      // 1. Send confirmation to Client
       await transporter.sendMail({
         from: fromAddr,
         to: booking.clientEmail,
@@ -299,7 +484,27 @@ async function dispatchConfirmationEmail(booking: Booking, currentConfig: Barber
         html: htmlContent
       });
       status = 'sent';
-      console.log(`[Email] Sent real confirmation email to ${booking.clientEmail} for booking ${booking.id}`);
+      console.log(`[Email] Sent real confirmation email to client ${booking.clientEmail} for booking ${booking.id}`);
+
+      // 2. Also notify Barber via Email if barber has an email address registered
+      if (booking.barberId) {
+        const barber = db.getBarberByParam(booking.barberId);
+        if (barber && barber.email && barber.email.includes('@')) {
+          const barberSubject = `💈 ¡Nuevo Turno Agendado! #${booking.id} - ${booking.clientName} (${booking.date} ${booking.startTime})`;
+          const barberHtml = generateBarberNotificationEmailHtml(booking, barber, currentConfig);
+          try {
+            await transporter.sendMail({
+              from: fromAddr,
+              to: barber.email,
+              subject: barberSubject,
+              html: barberHtml
+            });
+            console.log(`[Email] Notification sent to barber ${barber.name} (${barber.email})`);
+          } catch (barberErr: any) {
+            console.warn('[Email] Could not dispatch email to barber:', barberErr?.message);
+          }
+        }
+      }
     } catch (err: any) {
       console.error('[Email] Failed sending real email:', err);
       status = 'error';
@@ -307,7 +512,13 @@ async function dispatchConfirmationEmail(booking: Booking, currentConfig: Barber
     }
   } else {
     // Simulated delivery with full inspection
-    console.log(`[Email-Simulation] Auto-generated confirmation email for ${booking.clientEmail} (#${booking.id})`);
+    console.log(`[Email-Simulation] Auto-generated confirmation email for client ${booking.clientEmail} (#${booking.id})`);
+    if (booking.barberId) {
+      const barber = db.getBarberByParam(booking.barberId);
+      if (barber?.email) {
+        console.log(`[Email-Simulation] Barber notification simulated for ${barber.email}`);
+      }
+    }
     status = 'simulated';
   }
 
@@ -1593,6 +1804,18 @@ app.post('/api/bookings', async (req, res) => {
     db.createBooking(newBooking);
     db.addEmailLog(emailResult.log);
 
+    // Dispatch real-time Web Push notification to the assigned barber
+    sendPushNotificationToBarber(assignedBarberId, {
+      title: '💈 ¡Nuevo Turno Reservado!',
+      body: `${newBooking.clientName} ha reservado para el ${newBooking.date} a las ${newBooking.startTime} hs (${newBooking.serviceNames.join(', ')}).`,
+      icon: '/pwa-192x192.png',
+      badge: '/pwa-192x192.png',
+      data: {
+        bookingId: newBooking.id,
+        url: '/?view=dashboard'
+      }
+    }).catch(pushErr => console.warn('[Push] Error sending booking notification to barber:', pushErr?.message));
+
     res.status(201).json({
       success: true,
       booking: newBooking,
@@ -1639,6 +1862,148 @@ app.post('/api/bookings/:id/send-email', async (req, res) => {
 // GET email logs (for reviewing sent confirmation emails in the dashboard)
 app.get('/api/email-logs', (req, res) => {
   res.json(db.getEmailLogs());
+});
+
+// ----------------------------------------------------
+// PUSH NOTIFICATIONS & EMAIL DIAGNOSTICS ENDPOINTS
+// ----------------------------------------------------
+
+// GET public VAPID key for browser subscription
+app.get('/api/push/public-key', (req, res) => {
+  res.json({ publicKey: vapidKeys.publicKey });
+});
+
+// POST subscribe a barber device to Web Push
+app.post('/api/push/subscribe', (req, res) => {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  const reqBarberId = barberSessions.get(token) || String(req.headers['x-barber-id'] || req.body.barberId || '');
+  const barber = reqBarberId ? db.getBarberByParam(reqBarberId) : db.getAllBarbers()[0];
+
+  if (!barber) {
+    return res.status(401).json({ error: 'Debes iniciar sesión para activar las notificaciones push en este dispositivo.' });
+  }
+
+  const { subscription, deviceName } = req.body;
+  if (!subscription || !subscription.endpoint || !subscription.keys?.p256dh || !subscription.keys?.auth) {
+    return res.status(400).json({ error: 'Objeto de suscripción Push inválido.' });
+  }
+
+  const saved = db.savePushSubscription(barber.id, subscription, deviceName || 'Dispositivo');
+  res.json({
+    success: true,
+    message: 'Dispositivo suscrito exitosamente a notificaciones push.',
+    subscription: saved
+  });
+});
+
+// POST unsubscribe a device
+app.post('/api/push/unsubscribe', (req, res) => {
+  const { endpoint } = req.body;
+  if (!endpoint) {
+    return res.status(400).json({ error: 'Se requiere el endpoint de la suscripción.' });
+  }
+  const deleted = db.deletePushSubscription(endpoint);
+  res.json({ success: true, deleted });
+});
+
+// POST send a test push notification to barber's active devices
+app.post('/api/push/test', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+    const reqBarberId = barberSessions.get(token) || String(req.headers['x-barber-id'] || req.body.barberId || '');
+    const barber = reqBarberId ? db.getBarberByParam(reqBarberId) : db.getAllBarbers()[0];
+
+    if (!barber) {
+      return res.status(401).json({ error: 'Debes iniciar sesión para enviar una prueba push.' });
+    }
+
+    const subs = db.getPushSubscriptionsForBarber(barber.id);
+    const result = await sendPushNotificationToBarber(barber.id, {
+      title: '💈 Notificación de Prueba BarberTurnos',
+      body: `¡Hola ${barber.name}! Las notificaciones push en tiempo real están funcionando perfectamente en este dispositivo.`,
+      icon: '/pwa-192x192.png',
+      badge: '/pwa-192x192.png',
+      data: {
+        url: '/?view=dashboard',
+        timestamp: Date.now()
+      }
+    });
+
+    res.json({
+      success: true,
+      message: subs.length > 0 
+        ? `Notificación enviada a ${result.sentCount} de ${subs.length} dispositivo(s) registrado(s).`
+        : 'No hay dispositivos suscritos para este barbero. Primero presiona "Activar Notificaciones en este Dispositivo".',
+      registeredDevices: subs.length,
+      ...result
+    });
+  } catch (err: any) {
+    console.error('Error in /api/push/test:', err);
+    res.status(500).json({ error: err.message || 'Error al procesar la notificación push de prueba.' });
+  }
+});
+
+// GET email service status (centralized account info)
+app.get('/api/email/status', (req, res) => {
+  const transporter = getEmailTransporter();
+  const currentConfig = db.getConfig();
+  const isSmtp = Boolean(transporter && currentConfig.autoSendEmail);
+  const host = process.env.SMTP_HOST || (process.env.SMTP_USER?.includes('@gmail.com') ? 'smtp.gmail.com' : undefined);
+  const user = process.env.SMTP_USER;
+  const fromAddr = process.env.SMTP_FROM || `"${currentConfig.shopName}" <${process.env.SMTP_USER || currentConfig.email}>`;
+
+  res.json({
+    mode: isSmtp ? 'smtp' : 'simulation',
+    autoSendEmail: currentConfig.autoSendEmail,
+    configured: Boolean(user),
+    from: fromAddr,
+    host: host || 'Modo Simulación (Consola / Logs)',
+    user: user ? user.replace(/(.{2})(.*)(@.*)/, '$1***$3') : 'No configurado',
+    recentLogsCount: db.getEmailLogs().length
+  });
+});
+
+// POST send a test email from centralized account
+app.post('/api/email/test', async (req, res) => {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  const reqBarberId = barberSessions.get(token) || String(req.headers['x-barber-id'] || req.body.barberId || '');
+  const barber = reqBarberId ? db.getBarberByParam(reqBarberId) : db.getAllBarbers()[0];
+
+  const targetEmail = req.body.email || barber?.email || process.env.SMTP_USER;
+  if (!targetEmail) {
+    return res.status(400).json({ error: 'Ingresa un correo electrónico de destino para la prueba.' });
+  }
+
+  const currentConfig = db.getConfig();
+  const testBooking: Booking = {
+    id: `TEST-${Math.floor(1000 + Math.random() * 9000)}`,
+    createdAt: new Date().toISOString(),
+    clientName: 'Cliente de Prueba',
+    clientEmail: targetEmail,
+    clientPhone: '+57 300 123 4567',
+    clientNotes: 'Prueba de entrega de correo centralizado',
+    barberId: barber?.id || 'alejandro',
+    barberName: barber?.name || 'Alejandro',
+    date: new Date().toISOString().split('T')[0],
+    startTime: '10:00',
+    endTime: '10:45',
+    serviceIds: ['corte_clasico'],
+    serviceNames: ['Corte Clásico / Sencillo'],
+    totalPrice: 18000,
+    totalDurationMinutes: 45,
+    status: 'confirmada',
+    emailSent: false
+  };
+
+  const emailResult = await dispatchConfirmationEmail(testBooking, currentConfig);
+  res.json({
+    success: emailResult.sent || emailResult.mode === 'simulation',
+    result: emailResult,
+    targetEmail
+  });
 });
 
 // ----------------------------------------------------

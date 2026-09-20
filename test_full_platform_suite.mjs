@@ -531,6 +531,170 @@ async function runSuite() {
       );
     }
 
+    // -------------------------------------------------------------------------
+    // CP-11: Notificaciones Push en Vivo para Barberos (VAPID)
+    // -------------------------------------------------------------------------
+    console.log(`\n${colors.blue}--- [11] Notificaciones Push en Vivo: VAPID & Dispositivos ---${colors.reset}`);
+    {
+      // 1. Get Public VAPID Key
+      const keyRes = await fetch(`${BASE_URL}/api/push/public-key`);
+      const keyData = await keyRes.json();
+      const validKey = keyRes.status === 200 && typeof keyData.publicKey === 'string' && keyData.publicKey.length > 30;
+
+      recordTest(
+        'CP-11.1',
+        'Obtención de clave pública VAPID para suscripción del navegador',
+        validKey,
+        `VAPID Key válida emitida: ${keyData.publicKey?.slice(0, 20)}...`
+      );
+
+      // 2. Subscribe Barber Device
+      const mockEndpoint = `https://fcm.googleapis.com/fcm/send/mock-token-${Date.now()}`;
+      const mockP256dh = 'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QT9AcDnVwT3JhWuWSSpt8mtDuS88GLumTNxIbTScE7HJH_Ro';
+      const mockAuth = 'tB8NClvd8w0hee1307Re0Q';
+
+      const subRes = await fetch(`${BASE_URL}/api/push/subscribe`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+          'x-barber-id': 'alejandro'
+        },
+        body: JSON.stringify({
+          subscription: {
+            endpoint: mockEndpoint,
+            keys: { p256dh: mockP256dh, auth: mockAuth }
+          },
+          deviceName: 'Celular Samsung Galaxy (Prueba)'
+        })
+      });
+      const subData = await subRes.json();
+
+      recordTest(
+        'CP-11.2',
+        'Registro y persistencia de suscripción Web Push vinculada al barbero',
+        subRes.status === 200 && subData.success && subData.subscription?.barberId === 'alejandro',
+        `Dispositivo registrado en SQLite: ${subData.subscription?.deviceName}`
+      );
+
+      // 3. Test Push Dispatch
+      const testPushRes = await fetch(`${BASE_URL}/api/push/test`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`,
+          'x-barber-id': 'alejandro'
+        }
+      });
+      const testPushData = await testPushRes.json();
+
+      recordTest(
+        'CP-11.3',
+        'Ejecución del endpoint de prueba de notificación push al barbero autenticado',
+        testPushRes.status === 200 && testPushData.success,
+        `Mensaje: ${testPushData.message}, Dispositivos objetivo: ${testPushData.registeredDevices}`
+      );
+
+      // 4. Unsubscribe Device
+      const unsubRes = await fetch(`${BASE_URL}/api/push/unsubscribe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: mockEndpoint })
+      });
+      const unsubData = await unsubRes.json();
+
+      recordTest(
+        'CP-11.4',
+        'Desuscripción segura y remoción del endpoint en la base de datos',
+        unsubRes.status === 200 && unsubData.deleted === true,
+        'Endpoint eliminado de la tabla barber_push_subscriptions exitosamente.'
+      );
+    }
+
+    // -------------------------------------------------------------------------
+    // CP-12: Correo Electrónico Centralizado y Notificación Dual
+    // -------------------------------------------------------------------------
+    console.log(`\n${colors.blue}--- [12] Notificaciones por Correo Electrónico Centralizado ---${colors.reset}`);
+    {
+      // 1. Query Email Status
+      const statusRes = await fetch(`${BASE_URL}/api/email/status`);
+      const statusData = await statusRes.json();
+
+      const hasMode = statusData.mode === 'smtp' || statusData.mode === 'simulation';
+      const hasFrom = typeof statusData.from === 'string' && statusData.from.length > 0;
+
+      recordTest(
+        'CP-12.1',
+        'Diagnóstico del servicio de correo y verificación de cuenta centralizada (FROM)',
+        statusRes.status === 200 && hasMode && hasFrom,
+        `Modo: ${statusData.mode.toUpperCase()}, Remitente central: ${statusData.from}`
+      );
+
+      // 2. Dispatch Centralized Test Email
+      const testEmailRes = await fetch(`${BASE_URL}/api/email/test`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ email: 'barbero.test@barberturnos.local' })
+      });
+      const testEmailData = await testEmailRes.json();
+
+      recordTest(
+        'CP-12.2',
+        'Emisión de correo de prueba desde la cuenta centralizada de la aplicación',
+        testEmailRes.status === 200 && testEmailData.success,
+        `Destino: ${testEmailData.targetEmail}, Modo de despacho: ${testEmailData.result?.mode}`
+      );
+
+      // 3. Dual Notification on Booking: Client + Barber
+      const dualBookingDate = '2029-05-' + String(10 + (Date.now() % 15)).padStart(2, '0');
+      const dualSlotTime = '14:30';
+
+      // Ensure slot is created
+      await fetch(`${BASE_URL}/api/slots/batch-create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dates: [dualBookingDate],
+          times: [dualSlotTime],
+          barberId: 'alejandro'
+        })
+      });
+
+      const dualBookingRes = await fetch(`${BASE_URL}/api/bookings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientName: 'Cliente Notificaciones',
+          clientEmail: 'cliente.dual@ejemplo.com',
+          clientPhone: '+57 311 555 9999',
+          barberId: 'alejandro',
+          date: dualBookingDate,
+          startTime: dualSlotTime,
+          serviceIds: ['corte_clasico']
+        })
+      });
+      const dualBookingData = await dualBookingRes.json();
+
+      const bookingCreated = dualBookingRes.status === 201 && Boolean(dualBookingData.booking?.id);
+      const emailDispatched = dualBookingData.emailStatus?.sent === true || dualBookingData.emailStatus?.mode === 'simulation';
+
+      // Check that email log exists
+      const logsRes = await fetch(`${BASE_URL}/api/email-logs`);
+      const logs = await logsRes.json();
+      const hasBookingLog = logs.some(l => l.bookingId === dualBookingData.booking?.id);
+
+      recordTest(
+        'CP-12.3',
+        'Reserva dispara confirmación centralizada con registro en historial y notificación push',
+        bookingCreated && emailDispatched && hasBookingLog,
+        bookingCreated
+          ? `Cita ${dualBookingData.booking?.id} confirmada. Log de correo registrado para ${dualBookingData.booking?.clientEmail}.`
+          : `Fallo al crear reserva: ${dualBookingData.error || dualBookingRes.status}`
+      );
+    }
   } catch (err) {
     console.error(`${colors.red}Error durante la ejecución de las pruebas:${colors.reset}`, err);
   } finally {

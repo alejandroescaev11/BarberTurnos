@@ -152,3 +152,14 @@ export interface BarberAuthenticator {
   createdAt: string;
 }
 
+export interface BarberPushSubscription {
+  id: string;
+  barberId: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  deviceName?: string;
+  createdAt: string;
+}
+
+

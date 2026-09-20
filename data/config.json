@@ -108,7 +108,7 @@
     }
   ],
   "hasPassword": true,
-  "googleSheetsScriptUrl": "https://script.google.com/macros/s/AKfycby0DEwPV3LrBW_CjFblvAJKw-qZutESbyRcrRfgjdltdsFcwkRMFsw5l5XOiWoVNOs/exec",
+  "googleSheetsScriptUrl": "https://script.google.com/macros/s/AKfycbxJ0PZsAV4KQ7bU8NRpqe83x71d0r7xqIw18ydXqpDrPUPjFIvxvce1rtsHWc2rzpAcnQ/exec",
   "barbers": [
     {
       "id": "alejandro",

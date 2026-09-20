@@ -679,7 +679,9 @@ async function runSuite() {
       const dualBookingData = await dualBookingRes.json();
 
       const bookingCreated = dualBookingRes.status === 201 && Boolean(dualBookingData.booking?.id);
-      const emailDispatched = dualBookingData.emailStatus?.sent === true || dualBookingData.emailStatus?.mode === 'simulation';
+
+      // Wait briefly for background notification dispatch to record log
+      await wait(300);
 
       // Check that email log exists
       const logsRes = await fetch(`${BASE_URL}/api/email-logs`);
@@ -689,9 +691,9 @@ async function runSuite() {
       recordTest(
         'CP-12.3',
         'Reserva dispara confirmación centralizada con registro en historial y notificación push',
-        bookingCreated && emailDispatched && hasBookingLog,
+        bookingCreated && hasBookingLog,
         bookingCreated
-          ? `Cita ${dualBookingData.booking?.id} confirmada. Log de correo registrado para ${dualBookingData.booking?.clientEmail}.`
+          ? `Cita ${dualBookingData.booking?.id} confirmada de forma inmediata. Log de correo registrado para ${dualBookingData.booking?.clientEmail}.`
           : `Fallo al crear reserva: ${dualBookingData.error || dualBookingRes.status}`
       );
     }

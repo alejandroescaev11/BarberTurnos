@@ -163,10 +163,17 @@ function getEmailTransporter() {
   const pass = process.env.SMTP_PASS;
 
   if (user && pass) {
+    const transportOptions: any = {
+      connectionTimeout: 4000,
+      greetingTimeout: 4000,
+      socketTimeout: 6000
+    };
+
     if (service) {
       return nodemailer.createTransport({
         service,
-        auth: { user, pass }
+        auth: { user, pass },
+        ...transportOptions
       });
     }
     if (host) {
@@ -174,7 +181,8 @@ function getEmailTransporter() {
         host,
         port,
         secure: port === 465,
-        auth: { user, pass }
+        auth: { user, pass },
+        ...transportOptions
       });
     }
   }
@@ -1794,33 +1802,39 @@ app.post('/api/bookings', async (req, res) => {
     // Save in SQLite DB (both in bookings and barber_slots table)
     db.createBooking(newBooking);
 
-    // Dispatch automatic confirmation email
-    const emailResult = await dispatchConfirmationEmail(newBooking, shopConfig);
-    newBooking.emailSent = emailResult.sent || emailResult.mode === 'simulation';
-    newBooking.emailSentAt = emailResult.log.sentAt;
-    if (emailResult.error) {
-      newBooking.emailError = emailResult.error;
-    }
-    db.createBooking(newBooking);
-    db.addEmailLog(emailResult.log);
-
-    // Dispatch real-time Web Push notification to the assigned barber
-    sendPushNotificationToBarber(assignedBarberId, {
-      title: '💈 ¡Nuevo Turno Reservado!',
-      body: `${newBooking.clientName} ha reservado para el ${newBooking.date} a las ${newBooking.startTime} hs (${newBooking.serviceNames.join(', ')}).`,
-      icon: '/pwa-192x192.png',
-      badge: '/pwa-192x192.png',
-      data: {
-        bookingId: newBooking.id,
-        url: '/?view=dashboard'
-      }
-    }).catch(pushErr => console.warn('[Push] Error sending booking notification to barber:', pushErr?.message));
-
+    // Respond immediately to the client (instant confirmation!)
     res.status(201).json({
       success: true,
-      booking: newBooking,
-      emailStatus: emailResult
+      booking: newBooking
     });
+
+    // Run notifications in background asynchronously without blocking the client booking screen
+    (async () => {
+      try {
+        const emailResult = await dispatchConfirmationEmail(newBooking, shopConfig);
+        newBooking.emailSent = emailResult.sent || emailResult.mode === 'simulation';
+        newBooking.emailSentAt = emailResult.log.sentAt;
+        if (emailResult.error) {
+          newBooking.emailError = emailResult.error;
+        }
+        db.createBooking(newBooking);
+        db.addEmailLog(emailResult.log);
+      } catch (err: any) {
+        console.warn('[Email] Error in background email dispatch:', err?.message);
+      }
+
+      // Dispatch real-time Web Push notification to the assigned barber
+      sendPushNotificationToBarber(assignedBarberId, {
+        title: '💈 ¡Nuevo Turno Reservado!',
+        body: `${newBooking.clientName} ha reservado para el ${newBooking.date} a las ${newBooking.startTime} hs (${newBooking.serviceNames.join(', ')}).`,
+        icon: '/pwa-192x192.png',
+        badge: '/pwa-192x192.png',
+        data: {
+          bookingId: newBooking.id,
+          url: '/?view=dashboard'
+        }
+      }).catch(pushErr => console.warn('[Push] Error sending booking notification to barber:', pushErr?.message));
+    })();
   } catch (err: any) {
     console.error('Error creating booking:', err);
     res.status(500).json({ error: 'Error interno al procesar la reserva.' });

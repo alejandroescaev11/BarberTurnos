@@ -479,17 +479,67 @@ function generateBarberNotificationEmailHtml(booking: Booking, barber: BarberPro
 /**
  * Dispatch confirmation email or log simulation (notifies client AND barber from the central application account)
  */
-async function dispatchConfirmationEmail(booking: Booking, currentConfig: BarberShopConfig): Promise<{ sent: boolean; mode: 'smtp' | 'simulation'; error?: string; log: EmailRecord }> {
+async function dispatchConfirmationEmail(booking: Booking, currentConfig: BarberShopConfig): Promise<{ sent: boolean; mode: 'google_apps_script' | 'smtp' | 'simulation'; error?: string; log: EmailRecord }> {
   const htmlContent = generateEmailHtml(booking, currentConfig);
   const subject = `💈 Confirmación de Turno #${booking.id} - ${currentConfig.shopName} (${booking.date} ${booking.startTime})`;
   const transporter = getEmailTransporter();
 
   let status: 'sent' | 'simulated' | 'error' = 'simulated';
+  let mode: 'google_apps_script' | 'smtp' | 'simulation' = 'simulation';
   let errorMsg: string | undefined = undefined;
 
   const fromAddr = process.env.SMTP_FROM || `"${currentConfig.shopName}" <${process.env.SMTP_USER || currentConfig.email}>`;
+  const appsScriptUrl = (process.env.GOOGLE_SHEETS_SCRIPT_URL || process.env.GOOGLE_APPS_SCRIPT_URL || currentConfig.googleSheetsScriptUrl || '').trim();
 
-  if (transporter && currentConfig.autoSendEmail) {
+  const targetBarber = booking.barberId ? db.getBarberByParam(booking.barberId) : undefined;
+  const barberHtml = targetBarber ? generateBarberNotificationEmailHtml(booking, targetBarber, currentConfig) : undefined;
+
+  // 1. PRIMARY DISPATCHER: Google Apps Script Webhook (Native Gmail delivery without SMTP or app password hurdles)
+  if (appsScriptUrl && currentConfig.autoSendEmail !== false) {
+    try {
+      const payload = {
+        date: booking.date,
+        time: booking.startTime,
+        clientName: booking.clientName,
+        clientPhone: booking.clientPhone,
+        clientEmail: booking.clientEmail,
+        service: booking.serviceNames.join(', '),
+        price: booking.totalPrice,
+        notes: booking.clientNotes || '',
+        bookingId: booking.id,
+        shopName: currentConfig.shopName,
+        barberEmail: targetBarber?.email || '',
+        subject,
+        htmlContent,
+        barberHtmlContent: barberHtml
+      };
+
+      const response = await fetch(appsScriptUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(12000)
+      });
+
+      const data: any = await response.json().catch(() => ({}));
+      if (response.ok && data.success !== false) {
+        status = 'sent';
+        mode = 'google_apps_script';
+        console.log(`[Email-AppsScript] Sent confirmation for booking ${booking.id} via Google Apps Script (client: ${booking.clientEmail})`);
+        if (data.emailClientError) {
+          console.warn('[Email-AppsScript] Warning from Google Apps Script:', data.emailClientError);
+        }
+      } else {
+        throw new Error(data.error || `HTTP ${response.status}`);
+      }
+    } catch (scriptErr: any) {
+      console.warn('[Email-AppsScript] Webhook dispatch encountered an error, trying SMTP fallback:', scriptErr?.message);
+      errorMsg = `AppsScript: ${scriptErr?.message}`;
+    }
+  }
+
+  // 2. SECONDARY DISPATCHER: Nodemailer SMTP (fallback if Google Apps Script is not configured or failed)
+  if (status !== 'sent' && transporter && currentConfig.autoSendEmail) {
     try {
       // 1. Send confirmation to Client
       await transporter.sendMail({
@@ -499,42 +549,40 @@ async function dispatchConfirmationEmail(booking: Booking, currentConfig: Barber
         html: htmlContent
       });
       status = 'sent';
-      console.log(`[Email] Sent real confirmation email to client ${booking.clientEmail} for booking ${booking.id}`);
+      mode = 'smtp';
+      errorMsg = undefined;
+      console.log(`[Email-SMTP] Sent confirmation email to client ${booking.clientEmail} for booking ${booking.id}`);
 
       // 2. Also notify Barber via Email if barber has an email address registered
-      if (booking.barberId) {
-        const barber = db.getBarberByParam(booking.barberId);
-        if (barber && barber.email && barber.email.includes('@')) {
-          const barberSubject = `💈 ¡Nuevo Turno Agendado! #${booking.id} - ${booking.clientName} (${booking.date} ${booking.startTime})`;
-          const barberHtml = generateBarberNotificationEmailHtml(booking, barber, currentConfig);
-          try {
-            await transporter.sendMail({
-              from: fromAddr,
-              to: barber.email,
-              subject: barberSubject,
-              html: barberHtml
-            });
-            console.log(`[Email] Notification sent to barber ${barber.name} (${barber.email})`);
-          } catch (barberErr: any) {
-            console.warn('[Email] Could not dispatch email to barber:', barberErr?.message);
-          }
+      if (targetBarber && targetBarber.email && targetBarber.email.includes('@')) {
+        const barberSubject = `💈 ¡Nuevo Turno Agendado! #${booking.id} - ${booking.clientName} (${booking.date} ${booking.startTime})`;
+        try {
+          await transporter.sendMail({
+            from: fromAddr,
+            to: targetBarber.email,
+            subject: barberSubject,
+            html: barberHtml || htmlContent
+          });
+          console.log(`[Email-SMTP] Notification sent to barber ${targetBarber.name} (${targetBarber.email})`);
+        } catch (barberErr: any) {
+          console.warn('[Email-SMTP] Could not dispatch email to barber:', barberErr?.message);
         }
       }
     } catch (err: any) {
-      console.error('[Email] Failed sending real email:', err);
+      console.error('[Email-SMTP] Failed sending real email via SMTP:', err?.message);
       status = 'error';
       errorMsg = err?.message || 'Error en el servidor SMTP';
     }
-  } else {
-    // Simulated delivery with full inspection
+  }
+
+  // 3. FALLBACK: Simulated delivery with full inspection if neither provider was active
+  if (status !== 'sent' && status !== 'error') {
     console.log(`[Email-Simulation] Auto-generated confirmation email for client ${booking.clientEmail} (#${booking.id})`);
-    if (booking.barberId) {
-      const barber = db.getBarberByParam(booking.barberId);
-      if (barber?.email) {
-        console.log(`[Email-Simulation] Barber notification simulated for ${barber.email}`);
-      }
+    if (targetBarber?.email) {
+      console.log(`[Email-Simulation] Barber notification simulated for ${targetBarber.email}`);
     }
     status = 'simulated';
+    mode = 'simulation';
   }
 
   const emailRecord: EmailRecord = {
@@ -546,7 +594,8 @@ async function dispatchConfirmationEmail(booking: Booking, currentConfig: Barber
     status,
     htmlContent,
     previewText: `Cita #${booking.id} confirmada para ${booking.clientName} el ${booking.date} a las ${booking.startTime} hrs. Total: $${booking.totalPrice}.`,
-    error: errorMsg
+    error: errorMsg,
+    provider: mode
   };
 
   emailLogs.unshift(emailRecord);
@@ -555,7 +604,7 @@ async function dispatchConfirmationEmail(booking: Booking, currentConfig: Barber
 
   return {
     sent: status === 'sent',
-    mode: status === 'sent' ? 'smtp' : 'simulation',
+    mode,
     error: errorMsg,
     log: emailRecord
   };
@@ -2019,18 +2068,33 @@ app.post('/api/push/test', async (req, res) => {
 app.get('/api/email/status', (req, res) => {
   const transporter = getEmailTransporter();
   const currentConfig = db.getConfig();
+  const appsScriptUrl = (process.env.GOOGLE_SHEETS_SCRIPT_URL || process.env.GOOGLE_APPS_SCRIPT_URL || currentConfig.googleSheetsScriptUrl || '').trim();
+  const isAppsScript = Boolean(appsScriptUrl);
   const isSmtp = Boolean(transporter && currentConfig.autoSendEmail);
-  const host = process.env.SMTP_HOST || (process.env.SMTP_USER?.includes('@gmail.com') ? 'smtp.gmail.com' : undefined);
-  const user = process.env.SMTP_USER;
   const fromAddr = process.env.SMTP_FROM || `"${currentConfig.shopName}" <${process.env.SMTP_USER || currentConfig.email}>`;
 
+  let mode: 'google_apps_script' | 'smtp' | 'simulation' = 'simulation';
+  let host = 'Modo Simulación (Consola / Logs)';
+  let user = 'No configurado';
+
+  if (isAppsScript && currentConfig.autoSendEmail !== false) {
+    mode = 'google_apps_script';
+    host = 'Google Apps Script Webhook (Gmail Nativo)';
+    user = 'Cuenta de Google (Apps Script)';
+  } else if (isSmtp) {
+    mode = 'smtp';
+    host = process.env.SMTP_HOST || (process.env.SMTP_USER?.includes('@gmail.com') ? 'smtp.gmail.com' : 'Servidor SMTP');
+    user = process.env.SMTP_USER ? process.env.SMTP_USER.replace(/(.{2})(.*)(@.*)/, '$1***$3') : 'Configurado';
+  }
+
   res.json({
-    mode: isSmtp ? 'smtp' : 'simulation',
+    mode,
     autoSendEmail: currentConfig.autoSendEmail,
-    configured: Boolean(user),
+    configured: isAppsScript || Boolean(process.env.SMTP_USER),
+    appsScriptConfigured: isAppsScript,
     from: fromAddr,
-    host: host || 'Modo Simulación (Consola / Logs)',
-    user: user ? user.replace(/(.{2})(.*)(@.*)/, '$1***$3') : 'No configurado',
+    host,
+    user,
     recentLogsCount: db.getEmailLogs().length
   });
 });
@@ -2070,7 +2134,7 @@ app.post('/api/email/test', async (req, res) => {
 
   const emailResult = await dispatchConfirmationEmail(testBooking, currentConfig);
   res.json({
-    success: emailResult.sent || emailResult.mode === 'simulation',
+    success: emailResult.sent || emailResult.mode === 'simulation' || emailResult.mode === 'google_apps_script',
     result: emailResult,
     targetEmail
   });

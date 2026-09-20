@@ -623,7 +623,7 @@ async function runSuite() {
       const statusRes = await fetch(`${BASE_URL}/api/email/status`);
       const statusData = await statusRes.json();
 
-      const hasMode = statusData.mode === 'smtp' || statusData.mode === 'simulation';
+      const hasMode = statusData.mode === 'smtp' || statusData.mode === 'simulation' || statusData.mode === 'google_apps_script';
       const hasFrom = typeof statusData.from === 'string' && statusData.from.length > 0;
 
       recordTest(
@@ -686,13 +686,17 @@ async function runSuite() {
 
       const bookingCreated = dualBookingRes.status === 201 && Boolean(dualBookingData.booking?.id);
 
-      // Wait briefly for background notification dispatch to record log
-      await wait(300);
-
-      // Check that email log exists
-      const logsRes = await fetch(`${BASE_URL}/api/email-logs`);
-      const logs = await logsRes.json();
-      const hasBookingLog = logs.some(l => l.bookingId === dualBookingData.booking?.id);
+      // Wait for background notification dispatch to complete and record log
+      let hasBookingLog = false;
+      for (let attempt = 0; attempt < 10; attempt++) {
+        await wait(500);
+        const logsRes = await fetch(`${BASE_URL}/api/email-logs`);
+        const logs = await logsRes.json();
+        if (logs.some(l => l.bookingId === dualBookingData.booking?.id)) {
+          hasBookingLog = true;
+          break;
+        }
+      }
 
       recordTest(
         'CP-12.3',

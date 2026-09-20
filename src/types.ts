@@ -138,6 +138,7 @@ export interface EmailRecord {
   htmlContent: string;
   previewText: string;
   error?: string;
+  provider?: string;
 }
 
 export interface BarberAuthenticator {

@@ -10,7 +10,3 @@ services:
         value: production
       - key: BARBER_PASSWORD
         value: barbero123
-    disk:
-      name: barberturnos-data
-      mountPath: /app/data
-      sizeGB: 1

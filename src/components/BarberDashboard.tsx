@@ -59,7 +59,7 @@ interface BarberDashboardProps {
   onRefreshBookings: () => void;
   onOpenQuickBooking: () => void;
   onLogout: () => void;
-  onUpdateCurrentBarber?: (updated: BarberProfile) => void;
+  onUpdateCurrentBarber?: (updated: BarberProfile, updatedConfig?: BarberShopConfig) => void;
 }
 
 export const BarberDashboard: React.FC<BarberDashboardProps> = ({
@@ -337,7 +337,7 @@ export const BarberDashboard: React.FC<BarberDashboardProps> = ({
   const [isLoadingLiveSlots, setIsLoadingLiveSlots] = useState(false);
   const [releasingSlotTime, setReleasingSlotTime] = useState<string | null>(null);
 
-  // Keep profile fields synchronized when activeBarber changes
+  // Keep profile fields synchronized ONLY when switching to a different barber account
   useEffect(() => {
     if (activeBarber) {
       setProfileName(activeBarber.name);
@@ -345,7 +345,7 @@ export const BarberDashboard: React.FC<BarberDashboardProps> = ({
       setProfileRole(activeBarber.role);
       setProfilePhone(activeBarber.phone || '');
     }
-  }, [activeBarber?.id, activeBarber?.name, activeBarber?.shopName]);
+  }, [activeBarber?.id]);
 
   // Fetch barbers list from server (strictly only for superuser admin)
   const fetchBarbers = async () => {
@@ -570,10 +570,16 @@ export const BarberDashboard: React.FC<BarberDashboardProps> = ({
       });
       const data = await res.json();
       if (res.ok && data.success && data.barber) {
-        if (onUpdateCurrentBarber) {
-          onUpdateCurrentBarber(data.barber);
-        }
+        // Immediately sync local form state with confirmed saved barber data
+        setProfileName(data.barber.name);
+        setProfileShopName(data.barber.shopName || '');
+        setProfileRole(data.barber.role);
+        setProfilePhone(data.barber.phone || '');
         setProfilePassword('');
+
+        if (onUpdateCurrentBarber) {
+          onUpdateCurrentBarber(data.barber, data.config);
+        }
         setProfileMessage({ success: true, text: '¡Tus datos y contraseña se actualizaron correctamente!' });
         fetchBarbers();
       } else {

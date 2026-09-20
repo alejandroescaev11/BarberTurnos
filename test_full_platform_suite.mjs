@@ -156,8 +156,11 @@ async function runSuite() {
     // CP-03: Prevención de Colisiones Simultáneas de Citas (Concurrencia)
     // -------------------------------------------------------------------------
     {
-      const futureDate = '2028-10-' + String(10 + (Date.now() % 15)).padStart(2, '0');
-      const slotTime = '11:00';
+      const uniqueSuffix = Date.now().toString().slice(-6);
+      const futureDate = `2029-11-${String(1 + (Number(uniqueSuffix) % 25)).padStart(2, '0')}`;
+      const slotHour = 10 + (Number(uniqueSuffix.slice(0, 2)) % 8);
+      const slotMin = Number(uniqueSuffix.slice(2, 4)) % 2 === 0 ? '00' : '30';
+      const slotTime = `${String(slotHour).padStart(2, '0')}:${slotMin}`;
       const barberId = 'alejandro';
 
       // 1. Create available slot
@@ -649,8 +652,11 @@ async function runSuite() {
       );
 
       // 3. Dual Notification on Booking: Client + Barber
-      const dualBookingDate = '2029-05-' + String(10 + (Date.now() % 15)).padStart(2, '0');
-      const dualSlotTime = '14:30';
+      const dualUnique = Date.now().toString().slice(-6);
+      const dualBookingDate = `2029-06-${String(1 + (Number(dualUnique) % 25)).padStart(2, '0')}`;
+      const dualSlotHour = 12 + (Number(dualUnique.slice(0, 2)) % 6);
+      const dualSlotMin = Number(dualUnique.slice(2, 4)) % 2 === 0 ? '10' : '40';
+      const dualSlotTime = `${String(dualSlotHour).padStart(2, '0')}:${dualSlotMin}`;
 
       // Ensure slot is created
       await fetch(`${BASE_URL}/api/slots/batch-create`, {
@@ -695,6 +701,62 @@ async function runSuite() {
         bookingCreated
           ? `Cita ${dualBookingData.booking?.id} confirmada de forma inmediata. Log de correo registrado para ${dualBookingData.booking?.clientEmail}.`
           : `Fallo al crear reserva: ${dualBookingData.error || dualBookingRes.status}`
+      );
+    }
+
+    // -------------------------------------------------------------------------
+    // CP-13: Persistencia y Sincronización Global de Configuración y Perfil
+    // -------------------------------------------------------------------------
+    console.log(`\n${colors.blue}--- [13] Persistencia y Sincronización Global de Configuración ---${colors.reset}`);
+    {
+      const testShopName = 'Alejo Barber Studio VIP';
+      const testPhone = '+57 312 345 6789';
+
+      // 1. Update master barber profile
+      const patchRes = await fetch(`${BASE_URL}/api/barber/me`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`,
+          'x-barber-id': 'alejandro'
+        },
+        body: JSON.stringify({
+          name: 'Alejandro Barber Master',
+          shopName: testShopName,
+          phone: testPhone
+        })
+      });
+      const patchData = await patchRes.json();
+
+      // 2. Query GET /api/config
+      const cfgRes = await fetch(`${BASE_URL}/api/config`);
+      const cfgData = await cfgRes.json();
+
+      // 3. Query GET /api/barber/me
+      const meRes = await fetch(`${BASE_URL}/api/barber/me`, {
+        headers: {
+          'Authorization': `Bearer ${adminToken}`,
+          'x-barber-id': 'alejandro'
+        }
+      });
+      const meData = await meRes.json();
+
+      const profileUpdated = patchRes.status === 200 && patchData.success === true;
+      const globalConfigUpdated = cfgData.shopName === testShopName && cfgData.phoneWhatsapp === testPhone;
+      const mePersisted = meData.barber?.shopName === testShopName && meData.barber?.phone === testPhone;
+
+      recordTest(
+        'CP-13.1',
+        'Actualización de perfil del administrador sincroniza globalmente la barbería (shop_config)',
+        profileUpdated && globalConfigUpdated,
+        `shopName global="${cfgData.shopName}", phoneWhatsapp="${cfgData.phoneWhatsapp}"`
+      );
+
+      recordTest(
+        'CP-13.2',
+        'Persistencia de datos de perfil del barbero master confirmada en SQLite',
+        mePersisted,
+        `Barbero=${meData.barber?.name}, Shop=${meData.barber?.shopName}, Phone=${meData.barber?.phone}`
       );
     }
   } catch (err) {

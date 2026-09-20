@@ -1,8 +1,8 @@
 {
-  "shopName": "Barbería Imperial & Co.",
+  "shopName": "Alejo Barber Studio",
   "tagline": "Estilo clásico, precisión moderna y atención personalizada",
   "address": "Calle 45 # 18-24, Zona Centro",
-  "phoneWhatsapp": "+57 310 987 6543",
+  "phoneWhatsapp": "+57 312 345 6789",
   "email": "contacto@barberiaimperial.com",
   "currencySymbol": "$",
   "slotIntervalMinutes": 30,
@@ -113,26 +113,32 @@
     {
       "id": "alejandro",
       "slug": "alejandro",
-      "name": "Alejandro Barber",
+      "name": "Alejandro Barber Master",
+      "shopName": "Alejo Barber Studio VIP",
       "role": "Barbero Master",
       "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80",
-      "phone": "+57 310 987 6543",
+      "phone": "+57 312 345 6789",
       "email": "alejandroescaev@gmail.com",
       "password": "barbero123",
-      "googleSheetsScriptUrl": "https://script.google.com/macros/s/AKfycby0DEwPV3LrBW_CjFblvAJKw-qZutESbyRcrRfgjdltdsFcwkRMFsw5l5XOiWoVNOs/exec",
-      "active": true
+      "active": true,
+      "status": "aprobado",
+      "isAdmin": true,
+      "createdAt": "2026-09-19T02:41:31.693Z"
     },
     {
       "id": "carlos",
       "slug": "carlos",
       "name": "Carlos Mendoza",
+      "shopName": "Mendoza Barber Club",
       "role": "Especialista en Degradados y Barba",
       "avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&auto=format&fit=crop&q=80",
       "phone": "+57 311 222 3344",
       "email": "carlos@barberiaimperial.com",
       "password": "barbero123",
-      "googleSheetsScriptUrl": "",
-      "active": true
+      "active": true,
+      "status": "aprobado",
+      "isAdmin": false,
+      "createdAt": "2026-09-19T02:41:31.696Z"
     }
   ]
 }

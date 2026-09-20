@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Navbar } from './components/Navbar';
 import { BookingWizard } from './components/BookingWizard';
 import { BarberDashboard } from './components/BarberDashboard';
@@ -40,7 +40,7 @@ export default function App() {
   const [isNetworkShareOpen, setIsNetworkShareOpen] = useState(false);
 
   // Fetch initial config & bookings
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const [cfgRes, bkgRes] = await Promise.all([
         fetch('/api/config'),
@@ -60,7 +60,7 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -73,8 +73,17 @@ export default function App() {
         window.history.replaceState({}, '', '/');
       }
 
+      let fallbackBarberId = '';
+      const savedUser = sessionStorage.getItem('barber_current_user');
+      if (savedUser) {
+        try { fallbackBarberId = JSON.parse(savedUser)?.id || ''; } catch {}
+      }
+
       fetch('/api/barber/me', {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          ...(fallbackBarberId ? { 'x-barber-id': fallbackBarberId } : {})
+        }
       })
         .then(res => res.json())
         .then(data => {
@@ -126,13 +135,15 @@ export default function App() {
     }
   };
 
-  const handleUpdateCurrentBarber = (updated: BarberProfile) => {
+  const handleUpdateCurrentBarber = (updated: BarberProfile, updatedConfig?: BarberShopConfig) => {
     setCurrentBarber(updated);
     sessionStorage.setItem('barber_current_user', JSON.stringify(updated));
-    if (config?.barbers) {
+    if (updatedConfig) {
+      setConfig(updatedConfig);
+    } else if (config) {
       setConfig({
         ...config,
-        barbers: config.barbers.map(b => b.id === updated.id ? updated : b)
+        barbers: (config.barbers || []).map(b => b.id === updated.id ? updated : b)
       });
     }
   };

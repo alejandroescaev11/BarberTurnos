@@ -341,10 +341,8 @@ function seedDatabase() {
 // Run initial seed if needed
 seedDatabase();
 
-// Ensure existing barbers in database have meaningful shop names, approved status and admin role
+// Ensure default barbers in database have approved status and admin role if missing
 try {
-  db.prepare(`UPDATE barbers SET shopName = 'Alejo Barber Studio' WHERE id = 'alejandro' AND (shopName IS NULL OR shopName = '')`).run();
-  db.prepare(`UPDATE barbers SET shopName = 'Mendoza Barber Club' WHERE id = 'carlos' AND (shopName IS NULL OR shopName = '')`).run();
   db.prepare(`UPDATE barbers SET status = 'aprobado' WHERE status IS NULL OR status = ''`).run();
   db.prepare(`UPDATE barbers SET isAdmin = 1 WHERE id = 'alejandro'`).run();
 } catch (e) {
@@ -369,7 +367,7 @@ export function getBarberByParam(param?: string): BarberProfile | null {
     id: row.id,
     slug: row.slug,
     name: row.name,
-    shopName: row.shopName || (row.id === 'carlos' ? 'Mendoza Barber Club' : 'Alejo Barber Studio'),
+    shopName: row.shopName || undefined,
     role: row.role || 'Barbero Profesional',
     avatar: row.avatar,
     phone: row.phone,
@@ -398,7 +396,7 @@ export function getAllBarbers(filterStatus?: BarberStatus): BarberProfile[] {
     id: row.id,
     slug: row.slug,
     name: row.name,
-    shopName: row.shopName || (row.id === 'carlos' ? 'Mendoza Barber Club' : 'Alejo Barber Studio'),
+    shopName: row.shopName || undefined,
     role: row.role || 'Barbero Profesional',
     avatar: row.avatar,
     phone: row.phone,
@@ -444,10 +442,10 @@ export function updateBarber(id: string, updates: Partial<BarberProfile>): Barbe
     WHERE id = ?
   `).run(
     merged.name,
-    merged.shopName || current.shopName || `${merged.name} Studio`,
+    merged.shopName !== undefined ? merged.shopName : (current.shopName || ''),
     merged.role || 'Barbero Profesional',
     merged.avatar || '',
-    merged.phone || '',
+    merged.phone !== undefined ? merged.phone : (current.phone || ''),
     merged.email || '',
     merged.password || '',
     merged.active ? 1 : 0,

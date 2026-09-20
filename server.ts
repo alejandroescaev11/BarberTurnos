@@ -700,6 +700,8 @@ app.post('/api/config', (req, res) => {
   const currentConfig = db.getConfig();
   const updated = { ...currentConfig, ...req.body };
   db.updateConfig(updated);
+  config = updated;
+  writeJsonFile(CONFIG_FILE, updated);
   const safeConfig = { ...updated, hasPassword: Boolean(updated.barberPassword || process.env.BARBER_PASSWORD) };
   delete (safeConfig as any).barberPassword;
   res.json({ success: true, config: safeConfig });
@@ -905,11 +907,55 @@ function sanitizeBarber(b: BarberProfile): BarberProfile {
   return sanitized;
 }
 
+// Unified session & barber resolver from incoming request
+function resolveBarberFromRequest(req: express.Request): BarberProfile | null {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim() || String(req.query.token || '');
+  const headerBarberId = String(req.headers['x-barber-id'] || req.body?.barberId || req.query?.barberId || '');
+
+  if (token) {
+    if (barberSessions.has(token)) {
+      const id = barberSessions.get(token)!;
+      const barber = db.getBarberByParam(id);
+      if (barber) return barber;
+    }
+    // Check if token format is btoken_<barberId>_<timestamp>...
+    if (token.startsWith('btoken_')) {
+      const parts = token.split('_');
+      const extractedId = parts[1];
+      if (extractedId) {
+        const barber = db.getBarberByParam(extractedId);
+        if (barber) {
+          barberSessions.set(token, barber.id);
+          return barber;
+        }
+      }
+    }
+    // Check if token is master session format barber_session_<timestamp>
+    if (token.startsWith('barber_session_')) {
+      const primary = db.getAllBarbers().find(b => b.isAdmin) || db.getBarberByParam('alejandro') || db.getAllBarbers()[0];
+      if (primary) {
+        barberSessions.set(token, primary.id);
+        return primary;
+      }
+    }
+  }
+
+  // Fallback to validated x-barber-id
+  if (headerBarberId) {
+    const barber = db.getBarberByParam(headerBarberId);
+    if (barber) return barber;
+  }
+
+  return null;
+}
+
 // POST verify barber password / PIN (backwards compatibility)
 app.post('/api/barber/verify-pin', (req, res) => {
   const { password, barberId, email } = req.body;
   const rawPass = String(password || '').trim();
-  const currentPassword = config.barberPassword || process.env.BARBER_PASSWORD || 'barbero123';
+  const currentConfig = db.getConfig();
+  const currentPassword = currentConfig.barberPassword || process.env.BARBER_PASSWORD || 'barbero123';
 
   if (!rawPass) {
     return res.status(400).json({ success: false, error: 'Por favor ingresa la contraseña.' });
@@ -931,13 +977,13 @@ app.post('/api/barber/verify-pin', (req, res) => {
 
   // Check if matches master or any barber
   if (rawPass === currentPassword.trim()) {
-    const primaryBarber = config.barbers?.[0];
+    const primaryBarber = db.getAllBarbers().find(b => b.isAdmin) || db.getBarberByParam('alejandro') || db.getAllBarbers()[0];
     const token = 'barber_session_' + Date.now();
     if (primaryBarber) barberSessions.set(token, primaryBarber.id);
     return res.json({ success: true, token, barber: primaryBarber ? sanitizeBarber(primaryBarber) : undefined });
   }
 
-  const matchedBarber = config.barbers?.find(b => b.password && b.password.trim() === rawPass);
+  const matchedBarber = db.getAllBarbers().find(b => b.password && b.password.trim() === rawPass);
   if (matchedBarber) {
     const token = `btoken_${matchedBarber.id}_${Date.now()}`;
     barberSessions.set(token, matchedBarber.id);
@@ -1085,17 +1131,7 @@ app.post(['/api/barber/register', '/api/barbers/register'], (req, res) => {
 
 // GET current authenticated barber profile
 app.get('/api/barber/me', (req, res) => {
-  const authHeader = req.headers.authorization || '';
-  const token = authHeader.replace(/^Bearer\s+/i, '').trim() || String(req.query.token || '');
-  const barberId = barberSessions.get(token) || String(req.headers['x-barber-id'] || req.query.barberId || '');
-
-  let barber: BarberProfile | null = null;
-  if (barberId) {
-    barber = db.getBarberByParam(barberId);
-  }
-  if (!barber) {
-    barber = db.getAllBarbers()[0] || null;
-  }
+  const barber = resolveBarberFromRequest(req) || db.getAllBarbers().find(b => b.isAdmin) || db.getBarberByParam('alejandro') || db.getAllBarbers()[0];
 
   if (!barber) {
     return res.status(401).json({ error: 'No autenticado' });
@@ -1106,25 +1142,16 @@ app.get('/api/barber/me', (req, res) => {
 
 // PATCH update current barber profile (including shopName and personal password)
 app.patch('/api/barber/me', (req, res) => {
-  const authHeader = req.headers.authorization || '';
-  const token = authHeader.replace(/^Bearer\s+/i, '').trim() || String(req.query.token || '');
-  const reqBarberId = barberSessions.get(token) || String(req.headers['x-barber-id'] || req.body.barberId || '');
-
-  const targetId = reqBarberId || db.getAllBarbers()[0]?.id;
-  if (!targetId) {
-    return res.status(401).json({ error: 'Sesión no válida o expirada.' });
-  }
-
-  const current = db.getBarberByParam(targetId);
+  const current = resolveBarberFromRequest(req) || db.getAllBarbers().find(b => b.isAdmin) || db.getBarberByParam('alejandro') || db.getAllBarbers()[0];
   if (!current) {
-    return res.status(404).json({ error: 'Cuenta de barbero no encontrada.' });
+    return res.status(401).json({ error: 'Sesión no válida o expirada.' });
   }
 
   const { name, shopName, role, phone, email, avatar, newPassword, password } = req.body;
   const updates: Partial<BarberProfile> = {};
 
   if (name && String(name).trim()) updates.name = String(name).trim();
-  if (shopName && String(shopName).trim()) updates.shopName = String(shopName).trim();
+  if (shopName !== undefined) updates.shopName = String(shopName).trim();
   if (role && String(role).trim()) updates.role = String(role).trim();
   if (phone !== undefined) updates.phone = String(phone).trim();
   if (email && String(email).trim()) updates.email = String(email).trim().toLowerCase();
@@ -1136,7 +1163,38 @@ app.patch('/api/barber/me', (req, res) => {
   }
 
   const updated = db.updateBarber(current.id, updates);
-  res.json({ success: true, barber: updated ? sanitizeBarber(updated) : null });
+
+  // GLOBAL CONFIGURATION SYNCHRONIZATION:
+  // If this barber is an administrator (or primary admin Alejandro),
+  // propagate the shopName and phoneWhatsapp globally across the entire platform
+  let currentShopConfig = db.getConfig();
+  const isAdminBarber = Boolean(current.isAdmin || current.id === 'alejandro');
+  if (isAdminBarber && updated) {
+    let configModified = false;
+    if (updates.shopName && updates.shopName !== currentShopConfig.shopName) {
+      currentShopConfig.shopName = updates.shopName;
+      configModified = true;
+    }
+    if (updates.phone !== undefined && updates.phone !== currentShopConfig.phoneWhatsapp) {
+      currentShopConfig.phoneWhatsapp = updates.phone;
+      configModified = true;
+    }
+    if (configModified) {
+      currentShopConfig = db.updateConfig(currentShopConfig);
+      config = currentShopConfig;
+      writeJsonFile(CONFIG_FILE, currentShopConfig);
+      console.log(`[Global Config] Sincronización global completada: shopName="${currentShopConfig.shopName}", phone="${currentShopConfig.phoneWhatsapp}"`);
+    }
+  }
+
+  const safeConfig = { ...currentShopConfig, hasPassword: Boolean(currentShopConfig.barberPassword || process.env.BARBER_PASSWORD) };
+  delete (safeConfig as any).barberPassword;
+
+  res.json({
+    success: true,
+    barber: updated ? sanitizeBarber(updated) : null,
+    config: safeConfig
+  });
 });
 
 // ----------------------------------------------------
@@ -1439,9 +1497,7 @@ app.post('/api/auth/webauthn/login-verify', async (req, res) => {
 // GET registered devices for current barber
 app.get('/api/auth/webauthn/devices', (req, res) => {
   const authHeader = req.headers.authorization || '';
-  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-  const reqBarberId = barberSessions.get(token) || String(req.headers['x-barber-id'] || '');
-  const barber = reqBarberId ? db.getBarberByParam(reqBarberId) : null;
+  const barber = resolveBarberFromRequest(req);
 
   if (!barber) {
     return res.status(401).json({ error: 'No autenticado' });
@@ -1460,10 +1516,7 @@ app.get('/api/auth/webauthn/devices', (req, res) => {
 
 // DELETE a registered device for current barber
 app.delete('/api/auth/webauthn/devices/:id', (req, res) => {
-  const authHeader = req.headers.authorization || '';
-  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-  const reqBarberId = barberSessions.get(token) || String(req.headers['x-barber-id'] || '');
-  const barber = reqBarberId ? db.getBarberByParam(reqBarberId) : null;
+  const barber = resolveBarberFromRequest(req);
 
   if (!barber) {
     return res.status(401).json({ error: 'No autenticado' });
@@ -1477,10 +1530,8 @@ app.delete('/api/auth/webauthn/devices/:id', (req, res) => {
 // Barber Management Endpoints (Public sanitized list: only approved barbers by default)
 app.get('/api/barbers', (req, res) => {
   const { all } = req.query;
-  const authHeader = req.headers.authorization || '';
-  const token = authHeader.replace(/^Bearer\s+/i, '').trim() || String(req.query.token || '');
-  const callerBarberId = barberSessions.get(token) || String(req.headers['x-barber-id'] || '');
-  const caller = callerBarberId ? db.getBarberByParam(callerBarberId) : null;
+  const caller = resolveBarberFromRequest(req);
+  const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
 
   // If all barbers are requested by an authenticated barber or admin
   if (all === 'true' && (caller || token)) {
@@ -1501,10 +1552,8 @@ app.patch('/api/barbers/:id/status', (req, res) => {
     return res.status(400).json({ error: 'Estado inválido. Debe ser aprobado, pendiente, pausado o rechazado.' });
   }
 
-  const authHeader = req.headers.authorization || '';
-  const token = authHeader.replace(/^Bearer\s+/i, '').trim() || String(req.query.token || '');
-  const callerBarberId = barberSessions.get(token) || String(req.headers['x-barber-id'] || '');
-  const caller = callerBarberId ? db.getBarberByParam(callerBarberId) : null;
+  const caller = resolveBarberFromRequest(req);
+  const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
   const isMasterToken = token && token.startsWith('barber_session_');
 
   if (!isMasterToken && (!caller || (!caller.isAdmin && caller.id !== 'alejandro'))) {

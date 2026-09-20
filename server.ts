@@ -159,19 +159,26 @@ function getEmailTransporter() {
   const service = process.env.SMTP_SERVICE;
   const host = process.env.SMTP_HOST || (process.env.SMTP_USER?.includes('@gmail.com') ? 'smtp.gmail.com' : undefined);
   const port = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : (service === 'gmail' || host === 'smtp.gmail.com' ? 465 : 587);
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
+  const rawUser = process.env.SMTP_USER;
+  const rawPass = process.env.SMTP_PASS;
 
-  if (user && pass) {
+  if (rawUser && rawPass) {
+    const user = rawUser.trim().replace(/^["']|["']$/g, '');
+    // Google app passwords are 16 characters often copied with spaces (e.g. 'abcd efgh ijkl mnop')
+    // Strip all spaces and quotes to ensure exact SMTP handshake
+    const pass = (user.includes('@gmail.com') || process.env.SMTP_HOST?.includes('gmail'))
+      ? rawPass.replace(/[\s"']/g, '')
+      : rawPass.trim().replace(/^["']|["']$/g, '');
+
     const transportOptions: any = {
-      connectionTimeout: 4000,
-      greetingTimeout: 4000,
-      socketTimeout: 6000
+      connectionTimeout: 5000,
+      greetingTimeout: 5000,
+      socketTimeout: 8000
     };
 
-    if (service) {
+    if (service === 'gmail' || (!process.env.SMTP_HOST && user.includes('@gmail.com'))) {
       return nodemailer.createTransport({
-        service,
+        service: 'gmail',
         auth: { user, pass },
         ...transportOptions
       });

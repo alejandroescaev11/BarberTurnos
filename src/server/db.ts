@@ -9,8 +9,8 @@ import {
   BookingStatus, 
   EmailRecord, 
   Service, 
-  SheetSlot, 
-  SheetDateOption,
+  BarberSlot, 
+  BarberDateOption,
   BarberAuthenticator 
 } from '../types';
 
@@ -270,7 +270,7 @@ function seedDatabase() {
     }
 
     // 5. Migrate Slots
-    const slotsData = readJsonSafely<SheetSlot[]>(APP_SLOTS_FILE, []);
+    const slotsData = readJsonSafely<BarberSlot[]>(APP_SLOTS_FILE, []);
     if (Array.isArray(slotsData) && slotsData.length > 0) {
       const insertSlot = db.prepare(`
         INSERT OR REPLACE INTO barber_slots
@@ -466,7 +466,7 @@ export function deleteBarber(id: string): boolean {
 // SLOTS & AGENDA METHODS (STRICTLY PARTITIONED BY BARBER)
 // =========================================================================
 
-export function getSlotsForBarber(barberId: string, date?: string): SheetSlot[] {
+export function getSlotsForBarber(barberId: string, date?: string): BarberSlot[] {
   let query = 'SELECT * FROM barber_slots WHERE barberId = ?';
   const params: any[] = [barberId];
 
@@ -496,7 +496,7 @@ export function getSlotsForBarber(barberId: string, date?: string): SheetSlot[] 
   }));
 }
 
-export function getAvailableDatesForBarber(barberId: string, minDate: string, minTime?: string): SheetDateOption[] {
+export function getAvailableDatesForBarber(barberId: string, minDate: string, minTime?: string): BarberDateOption[] {
   const currentTime = minTime || '00:00';
   const rows = db.prepare(`
     SELECT date,

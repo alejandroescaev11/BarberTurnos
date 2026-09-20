@@ -1,6 +1,6 @@
 {
   "name": "BarberTurnos - Gestión de Citas y Turnos",
-  "description": "Aplicación instalable PWA de turnos para barbería con selección directa de hora, avisos sonoros instantáneos para el barbero y sincronización con Google Sheets.",
+  "description": "Plataforma instalable PWA de turnos para barberos independientes con selección directa de hora, avisos sonoros instantáneos, autenticación biométrica WebAuthn y base de datos persistente SQLite.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }

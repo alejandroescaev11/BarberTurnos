@@ -480,9 +480,9 @@ app.post('/api/config', (req, res) => {
 });
 
 // GET public profile of a barber by slug or ID
-app.get('/api/barber/profile/:slug', (req, res) => {
-  const { slug } = req.params;
-  const barber = db.getBarberByParam(slug);
+app.get(['/api/barber/profile/:slug', '/api/barber/profile'], (req, res) => {
+  const targetParam = String(req.params.slug || req.query.barberId || req.query.slug || '').trim();
+  const barber = db.getBarberByParam(targetParam);
   if (!barber) {
     return res.status(404).json({ error: 'Barbero no encontrado' });
   }
@@ -798,8 +798,8 @@ app.post('/api/barber/login', (req, res) => {
   });
 });
 
-// POST register a new barber account
-app.post('/api/barber/register', (req, res) => {
+// POST register a new barber account (supports both singular and plural)
+app.post(['/api/barber/register', '/api/barbers/register'], (req, res) => {
   const { name, shopName, email, password, role, phone } = req.body;
 
   if (!name || !name.trim()) {
@@ -849,7 +849,7 @@ app.post('/api/barber/register', (req, res) => {
   db.createBarber(newBarber);
 
   // Return pending confirmation without session token
-  return res.json({
+  return res.status(201).json({
     success: true,
     pending: true,
     message: '¡Registro exitoso! Tu cuenta ha sido recibida y está pendiente de activación por el administrador de BarberTurno.',

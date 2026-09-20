@@ -87,9 +87,6 @@ export interface BarberSlot {
   rawDate?: string;
 }
 
-// Alias for backward compatibility
-export type SheetSlot = BarberSlot;
-
 export interface BarberDateOption {
   date: string; // "YYYY-MM-DD"
   label: string; // "Hoy, 14 Sep" or "Vie, 20 Mar"
@@ -97,9 +94,6 @@ export interface BarberDateOption {
   totalSlots: number;
   availableSlots: number;
 }
-
-// Alias for backward compatibility
-export type SheetDateOption = BarberDateOption;
 
 export type BookingStatus = 'pendiente' | 'confirmada' | 'completada' | 'cancelada' | 'no_asistio';
 
